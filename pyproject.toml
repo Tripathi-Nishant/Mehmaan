@@ -1,0 +1,32 @@
+[project]
+name = "mehmaan"
+version = "0.1.0"
+description = "Voice-first marketplace for authentic local experiences in India"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14,<2",
+  "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
+  "jinja2>=3.1,<4",
+  "python-multipart>=0.0.18,<1",
+  "python-telegram-bot>=21.7,<22",
+  "pydantic-settings>=2.6,<3",
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "asyncpg>=0.30,<1",
+  "uvicorn[standard]>=0.32,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3,<9", "pytest-asyncio>=0.24,<1", "respx>=0.22,<1", "ruff>=0.8,<1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

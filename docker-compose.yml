@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: mehmaan
+      POSTGRES_PASSWORD: mehmaan
+      POSTGRES_DB: mehmaan
+    ports:
+      - "5432:5432"
+    volumes:
+      - mehmaan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mehmaan -d mehmaan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  mehmaan_pgdata:

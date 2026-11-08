@@ -1,0 +1,5 @@
+Extract only listing fields from this Hindi/Hinglish transcript.
+Return JSON only. Unknown fields must be null. Price must be integer paise.
+Fields: category, activity_description, duration_min, max_guests,
+price_per_person_paise, city, area, available_weekdays, start_time_local, food_type.
+Transcript: {transcript}

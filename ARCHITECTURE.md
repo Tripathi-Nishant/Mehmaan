@@ -102,6 +102,11 @@ All timestamps are stored in UTC and displayed in Asia/Kolkata. All money is in 
 
 ## 4. State machines
 
+P1 implements the onboarding state machine in `app/host_bot/onboarding.py` and validates
+incoming extraction updates with `ListingFieldsUpdate` before merging them into the session.
+The persisted P1 schema is represented by `Host`, `OnboardingSessionRecord`, and `Listing`
+in `app/db/models.py` and migration `0001_p1_onboarding`.
+
 All status changes go through a single `transition()` per entity. It checks an allowed-transitions map and performs a conditional update (`UPDATE … SET status=:to WHERE id=:id AND status=:from`). A rowcount of 0 raises `InvalidTransitionError`.
 
 ### Onboarding session

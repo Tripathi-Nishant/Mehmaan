@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}Discover local experiences · Mehmaan{% endblock %}
+{% block content %}<h1>Meet India through local hosts.</h1><p class="muted">Food, craft and culture experiences created by hosts in their own voice.</p>
+<form method="get"><input name="q" value="{{ q }}" placeholder="Try food in Jaipur or crafts near the old city"><button>Search</button></form>
+{% if listings %}<div class="grid">{% for listing in listings %}<article class="card"><p class="muted">{{ listing.category }} · {{ listing.city }}</p><h2><a href="/listings/{{ listing.id }}">{{ listing.description_hi }}</a></h2><p>{{ listing.area }} · Demo host (role-play)</p><p class="price">₹{{ '{:,}'.format(listing.price_per_person_paise // 100) }} per person</p><p class="muted">Verified demo listing · TEST experience</p></article>{% endfor %}</div>{% else %}<p>No live experiences matched that search.</p>{% endif %}{% endblock %}
