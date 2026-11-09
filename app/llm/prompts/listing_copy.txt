@@ -1,0 +1,9 @@
+Write English website copy for a home experience in India, for foreign travellers.
+Use ONLY the facts below. Do not invent dishes, history, prices, times or amenities.
+Keep dish, craft and place names as the host said them (transliterated, not translated).
+Return one JSON object only with:
+- title_en: under 80 characters, inviting, no emoji
+- description_en: 2-3 plain sentences describing what guests do
+- landmark_en: the landmark translated to English (null if none given)
+
+Facts (JSON): {facts}

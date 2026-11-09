@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -6,11 +7,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.booking.slots import format_ist
 from app.db.models import Listing, Slot
 from app.db.session import get_session
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/web/templates")
+templates.env.filters["ist"] = format_ist
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -27,6 +30,8 @@ async def browse(
                 Listing.category.ilike(term),
                 Listing.city.ilike(term),
                 Listing.area.ilike(term),
+                Listing.title_en.ilike(term),
+                Listing.description_en.ilike(term),
                 Listing.description_hi.ilike(term),
             )
         )
@@ -40,6 +45,7 @@ async def browse(
 async def listing_detail(
     request: Request,
     listing_id: UUID,
+    payment: str = Query(default=""),
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> HTMLResponse:
     listing = await session.scalar(
@@ -47,7 +53,19 @@ async def listing_detail(
     )
     if listing is None:
         raise HTTPException(status_code=404, detail="listing not found")
-    slots = (await session.scalars(select(Slot).where(Slot.listing_id == listing.id))).all()
+    slots = (
+        await session.scalars(
+            select(Slot)
+            .where(
+                Slot.listing_id == listing.id,
+                Slot.starts_at > datetime.now(UTC),
+                Slot.booked_count < Slot.capacity,
+            )
+            .order_by(Slot.starts_at)
+        )
+    ).all()
     return templates.TemplateResponse(
-        request=request, name="listing.html", context={"listing": listing, "slots": slots}
+        request=request,
+        name="listing.html",
+        context={"listing": listing, "slots": slots, "payment_failed": payment == "failed"},
     )

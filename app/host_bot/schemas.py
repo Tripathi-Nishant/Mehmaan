@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,10 +15,17 @@ class ListingFieldsUpdate(BaseModel):
     available_weekdays: list[int] | None = None
     start_time_local: str | None = None
     food_type: str | None = None
-    landmark: str | None = None
     consent_voice_clip: bool | None = None
-    cancellation_rule: str | None = None
-    location_shared: bool | None = None
+
+    @field_validator("start_time_local")
+    @classmethod
+    def start_time_is_hh_mm(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return datetime.strptime(value.strip(), "%H:%M").strftime("%H:%M")
+        except ValueError as exc:
+            raise ValueError('start_time_local must be 24-hour "HH:MM", e.g. "17:00"') from exc
 
     @field_validator("available_weekdays")
     @classmethod

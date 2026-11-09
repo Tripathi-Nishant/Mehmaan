@@ -1,9 +1,22 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -15,8 +28,9 @@ class Base(DeclarativeBase):
 class Host(Base):
     __tablename__ = "hosts"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    telegram_user_id: Mapped[int] = mapped_column(unique=True)
-    telegram_chat_id: Mapped[int]
+    # Telegram ids exceed 32 bits; the DB columns are BIGINT.
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger)
     display_name: Mapped[str | None] = mapped_column(String(120))
     language: Mapped[str] = mapped_column(String(10), default="hi-IN")
     city: Mapped[str | None] = mapped_column(String(120))
@@ -43,24 +57,34 @@ class Listing(Base):
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")
     category: Mapped[str] = mapped_column(String(40))
     title_en: Mapped[str | None] = mapped_column(String(200))
+    description_en: Mapped[str | None] = mapped_column(Text)
     description_hi: Mapped[str | None] = mapped_column(Text)
     source_transcript: Mapped[str | None] = mapped_column(Text)
     price_per_person_paise: Mapped[int]
     city: Mapped[str] = mapped_column(String(120))
     area: Mapped[str] = mapped_column(String(120))
-    exact_address: Mapped[str | None] = mapped_column(Text)
     location_lat: Mapped[float | None]
     location_lng: Mapped[float | None]
-    landmark: Mapped[str | None] = mapped_column(String(200))
-    cancellation_rule: Mapped[str | None] = mapped_column(String(300))
+    location_accuracy_m: Mapped[float | None]
+    landmark_hi: Mapped[str | None] = mapped_column(String(200))
+    landmark_en: Mapped[str | None] = mapped_column(String(200))
+    # Private: shown to the guest only after confirmation, never served by /media.
+    gate_photo_media_id: Mapped[UUID | None] = mapped_column(ForeignKey("media.id"))
+    duration_min: Mapped[int | None]
+    max_guests: Mapped[int | None]
+    available_weekdays: Mapped[list[int] | None] = mapped_column(ARRAY(Integer))  # Mon=0
+    start_time_local: Mapped[time | None] = mapped_column(Time)  # Asia/Kolkata wall clock
+    food_type: Mapped[str | None] = mapped_column(String(20))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Slot(Base):
     __tablename__ = "slots"
+    __table_args__ = (UniqueConstraint("listing_id", "starts_at"),)
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     listing_id: Mapped[UUID] = mapped_column(ForeignKey("listings.id"))
-    starts_at: Mapped[datetime]
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # UTC
     capacity: Mapped[int]
     booked_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -104,11 +128,40 @@ class Payment(Base):
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
+    __table_args__ = (
+        Index(
+            "uq_ledger_one_refund_per_booking",
+            "booking_id",
+            unique=True,
+            postgresql_where=text("type = 'REFUND'"),
+        ),
+    )
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     booking_id: Mapped[UUID] = mapped_column(ForeignKey("bookings.id"))
     host_id: Mapped[UUID | None] = mapped_column(ForeignKey("hosts.id"))
     type: Mapped[str] = mapped_column(String(30))
     amount_paise: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EmailOutbox(Base):
+    """Traveler emails, written in the same transaction as the status change they announce."""
+
+    __tablename__ = "email_outbox"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    booking_id: Mapped[UUID] = mapped_column(ForeignKey("bookings.id"))
+    kind: Mapped[str] = mapped_column(String(40))
+    to_email: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(String(120), unique=True)  # "{booking_id}:{kind}"
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")  # PENDING/SENT/FAILED
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -119,7 +172,7 @@ class Payout(Base):
     booking_id: Mapped[UUID] = mapped_column(ForeignKey("bookings.id"), unique=True)
     amount_paise: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(20), default="SCHEDULED")
-    scheduled_for: Mapped[datetime]
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 

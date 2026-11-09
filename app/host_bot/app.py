@@ -1,23 +1,35 @@
 from io import BytesIO
 
-from sqlalchemy import select
-from telegram import Update
+from sqlalchemy.ext.asyncio import AsyncSession
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.audio.convert import to_wav
-from app.booking.actions import host_accept
+from app.booking.host_reply import booking_reply, pending_booking_for
 from app.config import Settings
-from app.db.models import Booking, Host, Listing, Slot
+from app.db.models import Host
 from app.db.session import session_factory
 from app.gnani.stt import SttError, transcribe
 from app.gnani.tts import TtsError, synthesize
 from app.gnani.usage import UsageGuard
-from app.host_bot.intents import classify_intent
+from app.host_bot.intents import classify_reply
+from app.host_bot.location import PIN_REJECTIONS, check_location_pin
+from app.host_bot.onboarding import OnboardingSession
 from app.host_bot.persistence import load_session, publish_listing, save_session
-from app.host_bot.service import process_extracted_fields, question_for_field
-from app.jobs.actions import decline_and_refund
-from app.llm.client import extract_listing_fields
-from app.media.store import save_media
+from app.host_bot.service import (
+    decide_voice_action,
+    keyboard_for,
+    listing_copy,
+    needs_yes_no,
+    onboarding_gate,
+    photo_kind,
+    process_extracted_fields,
+    question_for_field,
+    reply_for,
+    try_change,
+)
+from app.llm.client import LlmOutputError, extract_listing_fields
+from app.media.store import MediaTooLargeError, save_media
 
 
 async def start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -35,118 +47,170 @@ async def voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     settings: Settings = context.application.bot_data["settings"]
     try:
-        telegram_file = await context.bot.get_file(update.message.voice.file_id)
-        audio = await telegram_file.download_as_bytearray()
-        wav = await to_wav(bytes(audio))
-        result = await transcribe(wav, "hi-IN", settings, UsageGuard(settings.gnani_daily_call_cap))
         async with session_factory() as db:
             host, onboarding = await load_session(
                 db, update.effective_user.id, update.effective_chat.id
             )
-            extracted = await extract_listing_fields(result.transcript, settings)
-            reply = process_extracted_fields(onboarding, extracted, settings.commission_bps)
-            await save_session(db, host.id, onboarding)
-        await send_host_voice_or_text(update, context, reply)
+            # A pending booking is the open prompt and wins over onboarding (even when LIVE).
+            pending = await pending_booking_for(db, host.id)
+            # Else gate before STT so a host whose listing is LIVE doesn't spend a Gnani call.
+            reply = None if pending else onboarding_gate(onboarding)
+            if reply is None:
+                telegram_file = await context.bot.get_file(update.message.voice.file_id)
+                audio = await telegram_file.download_as_bytearray()
+                wav = await to_wav(bytes(audio))
+                said = (
+                    await transcribe(
+                        wav, "hi-IN", settings, UsageGuard(settings.gnani_daily_call_cap)
+                    )
+                ).transcript
+                if pending:
+                    reply = await booking_reply(db, pending, said, settings)
+                else:
+                    reply = await onboarding_reply(db, host, onboarding, said, settings)
+        await send_host_voice_or_text(update, context, reply, keyboard_for(onboarding))
     except (SttError, OSError, RuntimeError):
         await update.message.reply_text("Awaaz saaf nahi aayi, kripya phir se bhejiye.")
 
 
+async def onboarding_reply(
+    db: AsyncSession, host: Host, onboarding: OnboardingSession, said: str, settings: Settings
+) -> str:
+    """Apply one host message (voice transcript or typed text) to onboarding; return the reply."""
+    if blocked := onboarding_gate(onboarding):
+        return blocked
+    if try_change(onboarding, said):
+        # Host named a field at read-back: it is cleared, so re-ask just that one.
+        await save_session(db, host.id, onboarding)
+        return reply_for(onboarding, settings.commission_bps)
+    intent = None
+    if needs_yes_no(onboarding.state, onboarding.next_field):
+        intent = await classify_reply(said, settings)
+    action = decide_voice_action(onboarding.state, onboarding.next_field, intent)
+    if action == "publish":
+        copy = await listing_copy(onboarding.fields, settings)
+        await publish_listing(db, host.id, onboarding, "Telegram onboarding transcript", copy)
+        reply = "Bahut badhiya! Aapka anubhav Mehmaan par LIVE ho gaya hai."
+    elif action == "change":
+        reply = "Kya badalna hai? Jaise daam, samay, din ya location boliye."
+    elif action == "ask_again":
+        reply = "Kripya haan ya nahi boliye. " + reply_for(onboarding, settings.commission_bps)
+    elif action in ("consent_yes", "consent_no"):
+        onboarding.set_field("consent_voice_clip", action == "consent_yes")
+        reply = reply_for(onboarding, settings.commission_bps)
+    elif action == "landmark":
+        # Landmark is kept in the host's own words; no LLM extraction.
+        onboarding.set_field("landmark_hi", said)
+        reply = reply_for(onboarding, settings.commission_bps)
+    else:
+        extracted = await extract_listing_fields(said, settings)
+        reply = process_extracted_fields(onboarding, extracted, settings.commission_bps)
+    await save_session(db, host.id, onboarding)
+    return reply
+
+
 async def send_host_voice_or_text(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, text: str
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    reply_markup: ReplyKeyboardMarkup | None = None,
 ) -> None:
     settings: Settings = context.application.bot_data["settings"]
     try:
         audio = await synthesize(
             text, "hi-IN", settings, UsageGuard(settings.gnani_daily_call_cap, kind="tts")
         )
-        await update.message.reply_voice(voice=BytesIO(audio), caption=text)
+        await update.message.reply_voice(
+            voice=BytesIO(audio), caption=text, reply_markup=reply_markup
+        )
     except (TtsError, RuntimeError):
-        await update.message.reply_text(text)
+        await update.message.reply_text(text, reply_markup=reply_markup)
 
 
 async def location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.location:
         return
-    if update.message.forward_origin is not None:
-        await send_host_voice_or_text(
-            update, context, "Kripya apne ghar se naya location pin bhejiye."
-        )
-        return
+    settings: Settings = context.application.bot_data["settings"]
+    pin = update.message.location
     async with session_factory() as db:
         host, onboarding = await load_session(
             db, update.effective_user.id, update.effective_chat.id
         )
-        onboarding.fields["location_shared"] = True
-        onboarding.fields["location_lat"] = update.message.location.latitude
-        onboarding.fields["location_lng"] = update.message.location.longitude
+        if blocked := onboarding_gate(onboarding):
+            await send_host_voice_or_text(update, context, blocked)
+            return
+        if not onboarding.fields.get("city"):
+            # The distance check needs the city, so ask for it before accepting a pin.
+            await send_host_voice_or_text(update, context, question_for_field("city"))
+            return
+        rejection = check_location_pin(
+            lat=pin.latitude,
+            lng=pin.longitude,
+            city=onboarding.fields["city"],
+            is_venue=update.message.venue is not None,
+            is_forwarded=update.message.forward_origin is not None,
+            max_km=settings.location_max_km_from_city,
+        )
+        if rejection:
+            await send_host_voice_or_text(
+                update, context, PIN_REJECTIONS[rejection], keyboard_for(onboarding)
+            )
+            return
+        onboarding.fields["location_accuracy_m"] = pin.horizontal_accuracy
+        onboarding.fields["location_lat"] = pin.latitude
+        onboarding.set_field("location_lng", pin.longitude)
         await save_session(db, host.id, onboarding)
-    next_field = onboarding.missing_fields[0] if onboarding.missing_fields else "landmark"
-    await send_host_voice_or_text(update, context, question_for_field(next_field))
+    await send_host_voice_or_text(
+        update, context, reply_for(onboarding, settings.commission_bps), keyboard_for(onboarding)
+    )
 
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.photo:
         return
+    settings: Settings = context.application.bot_data["settings"]
     telegram_file = await context.bot.get_file(update.message.photo[-1].file_id)
     data = bytes(await telegram_file.download_as_bytearray())
     async with session_factory() as db:
         host, onboarding = await load_session(
             db, update.effective_user.id, update.effective_chat.id
         )
-        media = await save_media(db, "photo", "image/jpeg", data)
-        if "gate_photo_media_id" not in onboarding.fields:
-            onboarding.fields["gate_photo_media_id"] = str(media.id)
-            reply = "Gate ya door ki photo mil gayi. Ab experience ki photo bhejiye."
+        if blocked := onboarding_gate(onboarding):
+            await send_host_voice_or_text(update, context, blocked)
+            return
+        kind = photo_kind(onboarding)
+        try:
+            media = await save_media(db, kind, "image/jpeg", data)
+        except MediaTooLargeError:
+            await update.message.reply_text("Photo bahut badi hai. Kripya chhoti photo bhejiye.")
+            return
+        if kind == "gate_photo":
+            onboarding.set_field("gate_photo_media_id", str(media.id))
+            reply = reply_for(onboarding, settings.commission_bps)
         else:
-            photos = onboarding.fields.setdefault("experience_photo_media_ids", [])
-            photos.append(str(media.id))
-            reply = (
-                "Experience ki photo mil gayi. Ab voice clip consent ke liye haan ya nahi bhejiye."
-            )
+            onboarding.fields.setdefault("experience_photo_media_ids", []).append(str(media.id))
+            reply = "Experience ki photo mil gayi, dhanyavaad."
         await save_session(db, host.id, onboarding)
-    await send_host_voice_or_text(update, context, reply)
+    await send_host_voice_or_text(update, context, reply, keyboard_for(onboarding))
 
 
 async def text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
-    intent = classify_intent(update.message.text).intent
-    if intent not in {"YES", "NO"}:
-        await update.message.reply_text("Kripya read-back ke baad haan ya badalna likhiye.")
-        return
+    settings: Settings = context.application.bot_data["settings"]
+    said = update.message.text
     async with session_factory() as db:
-        host = await db.scalar(
-            select(Host).where(Host.telegram_user_id == update.effective_user.id)
-        )
-        pending = None
-        if host:
-            pending = await db.scalar(
-                select(Booking)
-                .join(Slot, Booking.slot_id == Slot.id)
-                .join(Listing, Slot.listing_id == Listing.id)
-                .where(Listing.host_id == host.id, Booking.status == "PAID_PENDING_HOST")
-                .order_by(Booking.created_at)
-            )
-        if pending:
-            if intent == "YES":
-                pending.status = host_accept(pending.status)
-                await db.commit()
-                await update.message.reply_text(
-                    "Booking confirm ho gayi. Mehmaan ko pata chal gaya."
-                )
-            else:
-                await decline_and_refund(db, pending)
-                await update.message.reply_text("Booking decline aur test refund kar diya gaya.")
-            return
         host, onboarding = await load_session(
             db, update.effective_user.id, update.effective_chat.id
         )
-        if onboarding.state.value != "READBACK":
-            await update.message.reply_text("Pehle apne anubhav ka voice note bhejiye.")
-            return
-        await publish_listing(db, host.id, onboarding, "Telegram onboarding transcript")
-        await save_session(db, host.id, onboarding)
-    await update.message.reply_text("Bahut badhiya! Aapka anubhav Mehmaan par LIVE ho gaya hai.")
+        try:
+            if pending := await pending_booking_for(db, host.id):
+                reply = await booking_reply(db, pending, said, settings)
+            else:
+                reply = await onboarding_reply(db, host, onboarding, said, settings)
+        except LlmOutputError:
+            reply = "Maaf kijiye, abhi samajh nahi paaye. Kripya thodi der baad phir bhejiye."
+    await update.message.reply_text(reply, reply_markup=keyboard_for(onboarding))
 
 
 def build_application(settings: Settings) -> Application:

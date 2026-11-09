@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     hold_minutes: int = 15
     host_reply_timeout_minutes: int = 720
     payout_delay_minutes: int = 1440
+    location_max_km_from_city: float = 50
+    smtp_host: str = ""  # empty: emails stay queued (PENDING), nothing is sent
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "Mehmaan TEST <no-reply@example.com>"
     log_level: str = "INFO"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: str = ""

@@ -3,6 +3,6 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
-media/
+/media/
 demo_data/
 *.pyc
