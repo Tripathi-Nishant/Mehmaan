@@ -1,10 +1,12 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.booking.actions import host_decline, refund_declined
+from app.booking.actions import expire_hold, host_decline, refund_declined
 from app.db.models import Booking, LedgerEntry, Listing, Payment, Payout, Slot
+from app.notifications.email import enqueue_booking_email
+from app.payments.ledger import LedgerSplit, refund_reversal
 
 
 async def expire_unpaid_holds(session: AsyncSession, now: datetime | None = None) -> int:
@@ -18,31 +20,36 @@ async def expire_unpaid_holds(session: AsyncSession, now: datetime | None = None
             )
         )
     ).all()
-    count = 0
     for booking in bookings:
-        booking.status = "EXPIRED"
-        slot = await session.get(Slot, booking.slot_id)
-        if slot:
-            slot.booked_count = max(0, slot.booked_count - booking.guests)
-        count += 1
+        expire_hold(booking, await session.get(Slot, booking.slot_id))
     await session.commit()
-    return count
+    return len(bookings)
 
 
 async def decline_and_refund(session: AsyncSession, booking: Booking) -> None:
     booking.status = host_decline(booking.status)
     payment = await session.scalar(select(Payment).where(Payment.booking_id == booking.id))
+    slot = await session.get(Slot, booking.slot_id)
     if payment and payment.status == "CAPTURED":
         payment.status = "REFUNDED"
         booking.status = refund_declined(booking.status)
-        session.add(
+        listing = await session.get(Listing, slot.listing_id) if slot else None
+        split = LedgerSplit(
+            booking.amount_paise, booking.commission_paise, booking.host_payout_paise
+        )
+        session.add_all(
             LedgerEntry(
                 booking_id=booking.id,
-                type="REFUND",
-                amount_paise=booking.amount_paise,
+                host_id=listing.host_id if listing else None,
+                type=kind,
+                amount_paise=amount,
             )
+            for kind, amount in refund_reversal(split, refund=booking.amount_paise, host_keep=0)
         )
-    slot = await session.get(Slot, booking.slot_id)
+        booking.host_payout_paise = 0
+        await enqueue_booking_email(
+            session, booking, "BOOKING_CANCELLED", refund_paise=booking.amount_paise, declined=True
+        )
     if slot:
         slot.booked_count = max(0, slot.booked_count - booking.guests)
     await session.commit()
@@ -86,7 +93,13 @@ async def schedule_completed_payouts(session: AsyncSession, now: datetime | None
             select(Booking)
             .join(Slot, Booking.slot_id == Slot.id)
             .join(Listing, Slot.listing_id == Listing.id)
-            .where(Booking.status == "COMPLETED")
+            .where(
+                or_(
+                    Booking.status == "COMPLETED",
+                    # late traveler cancel: the host's kept share is paid out too
+                    and_(Booking.status == "CANCELLED", Booking.host_payout_paise > 0),
+                )
+            )
         )
     ).all()
     count = 0

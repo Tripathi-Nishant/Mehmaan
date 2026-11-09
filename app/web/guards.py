@@ -11,7 +11,7 @@ class PublicRateLimitMiddleware(BaseHTTPMiddleware):
         self.limiter = RateLimiter(limit=limit)
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith(("/book/", "/pay/", "/interpreter/", "/media/")):
+        if request.url.path.startswith(("/book", "/pay/", "/interpreter/", "/media/")):
             client = request.client.host if request.client else "unknown"
             if not self.limiter.allow(client):
                 return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)

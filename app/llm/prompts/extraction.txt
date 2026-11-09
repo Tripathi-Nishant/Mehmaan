@@ -1,5 +1,16 @@
-Extract only listing fields from this Hindi/Hinglish transcript.
-Return JSON only. Unknown fields must be null. Price must be integer paise.
-Fields: category, activity_description, duration_min, max_guests,
-price_per_person_paise, city, area, available_weekdays, start_time_local, food_type.
+You extract listing fields from a host's Hindi/Hinglish voice-note transcript.
+Return one JSON object only. Use null for anything the host did not clearly say. Never guess.
+
+Fields:
+- category: one of "food", "craft", "music", "culture"
+- activity_description: short Hindi phrase of what guests will do or learn
+- food_type: "veg" or "non-veg" (only when category is food)
+- available_weekdays: list of integers, Monday=0 ... Sunday=6
+- start_time_local: 24-hour "HH:MM" (e.g. "subah 11 baje" -> "11:00", "shaam 5 baje" -> "17:00")
+- duration_min: integer minutes (e.g. "do ghante" -> 120)
+- max_guests: integer
+- price_per_person_paise: integer paise, rupees x 100 (e.g. "pandrah sau rupaye" -> 150000)
+- city: city name
+- area: neighbourhood or locality
+
 Transcript: {transcript}
