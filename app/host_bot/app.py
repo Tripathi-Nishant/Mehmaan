@@ -34,7 +34,36 @@ from app.media.store import MediaTooLargeError, save_media
 
 async def start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
-        await update.message.reply_text("Namaste! Mehmaan par apna anubhav awaaz mein bhejiye.")
+        await send_host_voice_or_text(
+            update,
+            _,
+            "Namaste! Main Mehmaan Host Assistant hoon. Aap Hindi ya Hinglish mein voice note "
+            "bhejkar cooking, craft, music ya local experience list kar sakti hain. Main ek-ek "
+            "sawaal poochungi: anubhav, din, samay, duration, mehmaan, daam, city, location pin "
+            "aur photos. Booking ka jawab bhi haan ya nahi mein de sakti hain. Shuru karne ke "
+            "liye apne experience ke baare mein voice note bhejiye.",
+        )
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message:
+        await send_host_voice_or_text(
+            update,
+            context,
+            "Aap voice note bhejkar apna experience list kar sakti hain. Location ke liye Telegram "
+            "ka live location pin, phir gate aur experience ki photos bhejiye. Booking par haan ya "
+            "nahi boliye. Nayi listing ke liye /newlisting bhejiye.",
+        )
+
+
+async def new_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message:
+        await send_host_voice_or_text(
+            update,
+            context,
+            "Theek hai. Apne experience ke baare mein voice note bhejiye. Jaise: main ghar par "
+            "Rajasthani dal baati churma banati hoon.",
+        )
 
 
 async def unsupported(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -219,6 +248,8 @@ def build_application(settings: Settings) -> Application:
     application = Application.builder().token(settings.telegram_bot_token).build()
     application.bot_data["settings"] = settings
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("newlisting", new_listing))
     application.add_handler(MessageHandler(filters.VOICE, voice))
     application.add_handler(MessageHandler(filters.LOCATION, location))
     application.add_handler(MessageHandler(filters.PHOTO, photo))
