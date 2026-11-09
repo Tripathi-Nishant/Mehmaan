@@ -1,13 +1,17 @@
+import asyncio
 from io import BytesIO
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import InputFile, ReplyKeyboardMarkup, Update
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.request import HTTPXRequest
 
-from app.audio.convert import to_wav
+from app.audio.convert import to_telegram_voice, to_wav
 from app.booking.host_reply import booking_reply, pending_booking_for
 from app.config import Settings
-from app.db.models import Host
+from app.db.models import Booking, Host, Listing, Payout, Slot
 from app.db.session import session_factory
 from app.gnani.stt import SttError, transcribe
 from app.gnani.tts import TtsError, synthesize
@@ -64,6 +68,76 @@ async def new_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Theek hai. Apne experience ke baare mein voice note bhejiye. Jaise: main ghar par "
             "Rajasthani dal baati churma banati hoon.",
         )
+
+
+async def my_listings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    async with session_factory() as db:
+        host = await db.scalar(
+            select(Host).where(Host.telegram_user_id == update.effective_user.id)
+        )
+        listings = (
+            await db.scalars(select(Listing).where(Listing.host_id == host.id))
+            if host
+            else []
+        )
+        rows = list(listings)
+    if not rows:
+        reply = "Aapki abhi koi listing nahi hai. /newlisting bhejkar shuru kijiye."
+    else:
+        reply = "Aapki listings: " + "; ".join(
+            f"{item.title_en or item.category} — {item.status}" for item in rows
+        )
+    await send_host_voice_or_text(update, context, reply)
+
+
+async def bookings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    async with session_factory() as db:
+        host = await db.scalar(
+            select(Host).where(Host.telegram_user_id == update.effective_user.id)
+        )
+        rows = []
+        if host:
+            rows = list(
+                await db.scalars(
+                    select(Booking)
+                    .join(Slot, Booking.slot_id == Slot.id)
+                    .join(Listing, Slot.listing_id == Listing.id)
+                    .where(Listing.host_id == host.id)
+                    .order_by(Booking.created_at.desc())
+                    .limit(10)
+                )
+            )
+    if not rows:
+        reply = "Abhi koi booking request nahi hai."
+    else:
+        reply = "Bookings: " + "; ".join(
+            f"{item.status}, {item.guests} mehmaan, {item.host_payout_paise // 100} rupaye payout"
+            for item in rows
+        )
+    await send_host_voice_or_text(update, context, reply)
+
+
+async def payout_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    async with session_factory() as db:
+        host = await db.scalar(
+            select(Host).where(Host.telegram_user_id == update.effective_user.id)
+        )
+        rows = list(
+            await db.scalars(select(Payout).where(Payout.host_id == host.id))
+        ) if host else []
+    if not rows:
+        reply = "Abhi koi payout scheduled nahi hai."
+    else:
+        reply = "Payouts: " + "; ".join(
+            f"{item.amount_paise // 100} rupaye — {item.status}" for item in rows
+        )
+    await send_host_voice_or_text(update, context, reply)
 
 
 async def unsupported(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -149,11 +223,35 @@ async def send_host_voice_or_text(
         audio = await synthesize(
             text, "hi-IN", settings, UsageGuard(settings.gnani_daily_call_cap, kind="tts")
         )
+        voice_audio = await to_telegram_voice(audio)
         await update.message.reply_voice(
-            voice=BytesIO(audio), caption=text, reply_markup=reply_markup
+            voice=InputFile(BytesIO(voice_audio), filename="mehmaan-reply.ogg"),
+            caption=text,
+            reply_markup=reply_markup,
         )
     except (TtsError, RuntimeError):
         await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+async def download_telegram_bytes(context: ContextTypes.DEFAULT_TYPE, file_id: str) -> bytes:
+    """Download Telegram media with retries for slow Bot API file responses."""
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            telegram_file = await context.bot.get_file(file_id, read_timeout=300)
+            return bytes(
+                await telegram_file.download_as_bytearray(
+                    read_timeout=300,
+                    write_timeout=300,
+                    connect_timeout=60,
+                    pool_timeout=60,
+                )
+            )
+        except (TimedOut, NetworkError) as exc:
+            last_error = exc
+            if attempt < 2:
+                await asyncio.sleep(2 * (attempt + 1))
+    raise RuntimeError("Telegram media download failed") from last_error
 
 
 async def location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -198,8 +296,13 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.photo:
         return
     settings: Settings = context.application.bot_data["settings"]
-    telegram_file = await context.bot.get_file(update.message.photo[-1].file_id)
-    data = bytes(await telegram_file.download_as_bytearray())
+    try:
+        data = await download_telegram_bytes(context, update.message.photo[-1].file_id)
+    except RuntimeError:
+        await update.message.reply_text(
+            "Photo download nahi ho paayi. Kripya photo dobara bhejiye."
+        )
+        return
     async with session_factory() as db:
         host, onboarding = await load_session(
             db, update.effective_user.id, update.effective_chat.id
@@ -245,11 +348,29 @@ async def text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def build_application(settings: Settings) -> Application:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required to start the host bot")
-    application = Application.builder().token(settings.telegram_bot_token).build()
+    # Voice replies can be larger than normal Telegram messages.  Keep the
+    # polling timeout short, but allow enough time to upload generated audio.
+    telegram_request = HTTPXRequest(
+        connection_pool_size=10,
+        connect_timeout=30.0,
+        read_timeout=300.0,
+        write_timeout=120.0,
+        pool_timeout=30.0,
+        media_write_timeout=300.0,
+    )
+    application = (
+        Application.builder()
+        .token(settings.telegram_bot_token)
+        .request(telegram_request)
+        .build()
+    )
     application.bot_data["settings"] = settings
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("newlisting", new_listing))
+    application.add_handler(CommandHandler("mylistings", my_listings))
+    application.add_handler(CommandHandler("bookings", bookings_command))
+    application.add_handler(CommandHandler("payout", payout_command))
     application.add_handler(MessageHandler(filters.VOICE, voice))
     application.add_handler(MessageHandler(filters.LOCATION, location))
     application.add_handler(MessageHandler(filters.PHOTO, photo))

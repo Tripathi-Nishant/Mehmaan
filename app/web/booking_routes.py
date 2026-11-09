@@ -1,3 +1,4 @@
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -139,11 +140,14 @@ async def verify_payment(order_id: str, session: AsyncSession = Depends(get_sess
     booking = await session.get(Booking, payment.booking_id)
     if captured_now and booking:
         slot = await session.get(Slot, booking.slot_id)
-        await notify_host(
-            session,
-            booking,
-            booking_prompt_text(slot.starts_at, booking.guests, booking.host_payout_paise),
-        )
+        with suppress(Exception):
+            await notify_host(
+                session,
+                booking,
+                booking_prompt_text(slot.starts_at, booking.guests, booking.host_payout_paise),
+            )
+            # Payment is already committed. A Telegram outage must not turn a
+            # successful TEST payment into an HTTP 500 response.
     return RedirectResponse(f"/b/{booking.access_token}", status_code=303)
 
 

@@ -66,7 +66,7 @@ class Listing(Base):
     location_lat: Mapped[float | None]
     location_lng: Mapped[float | None]
     location_accuracy_m: Mapped[float | None]
-    landmark_hi: Mapped[str | None] = mapped_column(String(200))
+    landmark_hi: Mapped[str | None] = mapped_column(Text)
     landmark_en: Mapped[str | None] = mapped_column(String(200))
     # Private: shown to the guest only after confirmation, never served by /media.
     gate_photo_media_id: Mapped[UUID | None] = mapped_column(ForeignKey("media.id"))

@@ -6,7 +6,7 @@
 <p class="price">₹{{ '{:,}'.format(listing.price_per_person_paise // 100) }} per person</p><p>Demo host (role-play) · verification badge: demo</p>
 <p class="muted">Location shared · map pin and landmark are shared only after host confirmation.</p>
 <p class="muted">Cancellation: full refund up to 48 hours before; 80% refund after that.</p>
-{% if slots %}<h3>Book this experience</h3>
+{% if slots %}<h3>Book this experience</h3><p class="muted">A seat is held temporarily only while TEST payment is completed. It becomes a confirmed booking only after successful payment; failed or expired payment releases the seat.</p>
 <form method="post" action="/book" style="flex-direction:column;align-items:stretch">
 <fieldset><legend>Choose a date (India time)</legend>
 {% for slot in slots %}{% set left = slot.capacity - slot.booked_count %}<label style="display:block;margin:6px 0"><input type="radio" name="slot_id" value="{{ slot.id }}" required{% if loop.first %} checked{% endif %}> {{ slot.starts_at | ist }} · {{ left }} seat{{ '' if left == 1 else 's' }} left</label>

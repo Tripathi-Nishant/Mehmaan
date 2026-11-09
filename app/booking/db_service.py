@@ -47,6 +47,9 @@ async def create_hold(
         hold_expires_at=now + timedelta(minutes=hold_minutes),
     )
     session.add(traveler)
+    # Flush the parent row first. This makes the FK ordering explicit for
+    # asyncpg/PostgreSQL before the booking references traveler_id.
+    await session.flush([traveler])
     session.add(booking)
     slot.booked_count += guests
     await session.flush()
