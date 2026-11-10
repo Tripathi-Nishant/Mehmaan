@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Join Mehmaan{% endblock %}
+{% block content %}
+<section class="auth-shell" aria-labelledby="auth-title">
+  <div class="auth-intro">
+    <p class="eyebrow">Join the mehfil</p>
+    <h1 id="auth-title" class="t-page">Your next warm welcome starts here.</h1>
+    <p class="auth-lede">Create an account to keep every experience you discover and every reservation you make close at hand.</p>
+    <div class="auth-steps"><span>01</span><p>Choose an experience</p><span>02</span><p>Meet a local host</p><span>03</span><p>Leave with a story</p></div>
+  </div>
+  <div class="card auth-card">
+    <div class="auth-card-head"><p class="eyebrow">A little about you</p><h2>Create your account</h2></div>
+    {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="/auth/register" class="auth-form">
+      <div class="field"><label for="register-name">Full name</label><input id="register-name" name="name" autocomplete="name" required></div>
+      <div class="field"><label for="register-email">Email address</label><input id="register-email" type="email" name="email" autocomplete="email" required></div>
+      <div class="field"><label for="register-password">Password <span class="muted">(8+ characters)</span></label><input id="register-password" type="password" name="password" minlength="8" autocomplete="new-password" required></div>
+      <div class="field"><label for="register-role">I am here to</label><select id="register-role" name="role"><option value="traveler">Book local experiences</option><option value="host">Host my own experiences</option></select></div>
+      <button class="btn btn-primary" type="submit">Create account <span aria-hidden="true">→</span></button>
+    </form>
+    <p class="auth-switch">Already registered? <a href="/auth/login">Sign in</a></p>
+  </div>
+</section>
+{% endblock %}

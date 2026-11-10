@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.booking.actions import HoldExpiredError, capture_payment, expire_hold
 from app.booking.db_service import CANCELLABLE, SlotFullError, cancel_booking, create_hold
 from app.booking.host_reply import location_reveal
@@ -33,14 +34,17 @@ templates.env.filters["ist"] = format_ist
 
 @router.post("/book")
 async def book(
+    request: Request,
     slot_id: UUID = Form(),  # noqa: B008
     name: str = Form(),
     email: str = Form(),
+    phone: str = Form(default="", max_length=40),
     guests: int = Form(),
     dietary: str = Form(default="", max_length=200),
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> RedirectResponse:
     settings = get_settings()
+    user = await current_user(request, session)
     try:
         booking = await create_hold(
             session,
@@ -51,6 +55,8 @@ async def book(
             settings.hold_minutes,
             datetime.now(UTC),
             dietary,
+            user.id if user and user.role == "traveler" else None,
+            phone,
         )
     except SlotFullError as exc:
         raise HTTPException(
@@ -162,6 +168,7 @@ async def verify_payment(order_id: str, session: AsyncSession = Depends(get_sess
     booking = await session.get(Booking, payment.booking_id)
     if captured_now and booking:
         slot = await session.get(Slot, booking.slot_id)
+        traveler = await session.get(Traveler, booking.traveler_id)
         with suppress(Exception):
             await notify_host(
                 session,
@@ -171,6 +178,8 @@ async def verify_payment(order_id: str, session: AsyncSession = Depends(get_sess
                     booking.guests,
                     booking.host_payout_paise,
                     booking.dietary_notes,
+                    traveler.name if traveler else None,
+                    traveler.phone if traveler else None,
                 ),
             )
     return RedirectResponse(f"/b/{booking.access_token}", status_code=303)

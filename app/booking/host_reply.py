@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.booking.actions import host_accept
 from app.config import Settings
-from app.db.models import Booking, Listing, Slot
+from app.db.models import Booking, Listing, Slot, Traveler
 from app.host_bot.intents import classify_reply
 from app.host_bot.service import booking_prompt_text, route_host_reply
 from app.jobs.actions import decline_and_refund
@@ -45,8 +45,14 @@ async def booking_reply(db: AsyncSession, booking: Booking, said: str, settings:
     action = route_host_reply(True, await classify_reply(said, settings))
     if action == "ask_again":
         slot = await db.get(Slot, booking.slot_id)
+        traveler = await db.get(Traveler, booking.traveler_id)
         prompt = booking_prompt_text(
-            slot.starts_at, booking.guests, booking.host_payout_paise, booking.dietary_notes
+            slot.starts_at,
+            booking.guests,
+            booking.host_payout_paise,
+            booking.dietary_notes,
+            traveler.name if traveler else None,
+            traveler.phone if traveler else None,
         )
         return "Kripya haan ya nahi boliye. " + prompt
     return await answer_booking(db, booking, action)

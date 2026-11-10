@@ -14,6 +14,8 @@ from app.host_bot.app import build_application
 from app.host_bot.webhook import router as telegram_router
 from app.interpreter.routes import router as interpreter_router
 from app.jobs.scheduler import scheduler_loop
+from app.web.account_routes import router as account_router
+from app.web.auth_routes import router as auth_router
 from app.web.booking_routes import router as booking_router
 from app.web.errors import http_error, server_error, validation_error
 from app.web.guards import PublicRateLimitMiddleware
@@ -59,6 +61,8 @@ app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 app.include_router(telegram_router)
 app.include_router(web_router)
 app.include_router(booking_router)
+app.include_router(auth_router)
+app.include_router(account_router)
 app.include_router(interpreter_router)
 app.include_router(media_router)
 

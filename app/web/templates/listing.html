@@ -186,6 +186,7 @@
           </fieldset>
           <div class="field"><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required></div>
           <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required><p class="hint"><span>Your booking link and updates come here.</span></p></div>
+          <div class="field"><label for="phone">Phone number <span class="muted">(optional)</span></label><input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210"><p class="hint"><span>Shared with your host only if you provide it.</span></p></div>
           <div class="field"><label for="guests">Guests</label><input id="guests" name="guests" type="number" inputmode="numeric" min="1" max="{{ listing.max_guests or 1 }}" value="1" required></div>
           <div class="field"><label for="dietary">Dietary needs or allergies <span class="muted">(optional)</span></label><textarea id="dietary" name="dietary" maxlength="200" placeholder="For example: vegetarian, no peanuts"></textarea><p class="hint"><span>Your host hears this with your request.</span><span data-count>0 / 200</span></p></div>
           <div class="sum" aria-live="polite">

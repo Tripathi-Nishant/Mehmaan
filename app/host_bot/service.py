@@ -83,13 +83,23 @@ def fallback_copy(fields: Mapping) -> ListingCopy:
 
 
 def booking_prompt_text(
-    starts_at: datetime, guests: int, host_payout_paise: int, dietary_notes: str | None = None
+    starts_at: datetime,
+    guests: int,
+    host_payout_paise: int,
+    dietary_notes: str | None = None,
+    traveler_name: str | None = None,
+    traveler_phone: str | None = None,
 ) -> str:
     # ponytail: the guest's note is passed through in their words; LLM translation to Hindi is v2.
     note = f'Mehmaan ne khaane ke baare mein bataya: "{dietary_notes}". ' if dietary_notes else ""
+    contact = ""
+    if traveler_name:
+        contact += f" Mehmaan ka naam {traveler_name} hai."
+    if traveler_phone:
+        contact += f" Phone number {traveler_phone} hai."
     return (
         f"{format_ist(starts_at)} ke liye {guests} mehmaan ki booking aayi hai. "
-        f"Aapko {format_rupees(host_payout_paise)} milenge (test). {note}Haan ya nahi?"
+        f"Aapko {format_rupees(host_payout_paise)} milenge (test).{contact} {note}Haan ya nahi?"
     )
 
 

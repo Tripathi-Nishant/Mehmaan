@@ -24,6 +24,8 @@ async def create_hold(
     hold_minutes: int,
     now: datetime,
     dietary_notes: str | None = None,
+    traveler_account_id: UUID | None = None,
+    phone: str | None = None,
 ) -> Booking:
     """Reserve seats for an unpaid booking. Flushes but does not commit: the caller adds the
     payment order in the same transaction so a hold never exists without one."""
@@ -37,7 +39,12 @@ async def create_hold(
     if listing is None or listing.status != "LIVE":
         raise SlotFullError("listing is not bookable")
     # Ids set up front (not at flush) so the payment can reference the booking immediately.
-    traveler = Traveler(id=uuid4(), name=name, email=email)
+    traveler = Traveler(
+        id=uuid4(),
+        name=name.strip(),
+        email=email.strip().lower(),
+        phone=(phone or "").strip() or None,
+    )
     booking = Booking(
         id=uuid4(),
         slot_id=slot.id,
@@ -47,6 +54,7 @@ async def create_hold(
         amount_paise=listing.price_per_person_paise * guests,  # server-side, never from the form
         hold_expires_at=now + timedelta(minutes=hold_minutes),
         dietary_notes=(dietary_notes or "").strip() or None,
+        traveler_account_id=traveler_account_id,
     )
     session.add(traveler)
     await session.flush()  # no ORM relationships, so insert order isn't guaranteed: parent first

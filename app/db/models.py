@@ -40,6 +40,27 @@ class Host(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class UserAccount(Base):
+    __tablename__ = "user_accounts"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(20))  # traveler / host
+    display_name: Mapped[str] = mapped_column(String(120))
+    traveler_id: Mapped[UUID | None] = mapped_column(ForeignKey("travelers.id"), unique=True)
+    host_id: Mapped[UUID | None] = mapped_column(ForeignKey("hosts.id"), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("user_accounts.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class OnboardingSessionRecord(Base):
     __tablename__ = "onboarding_sessions"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -94,6 +115,7 @@ class Traveler(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -113,6 +135,7 @@ class Booking(Base):
     hold_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     host_reply_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dietary_notes: Mapped[str | None] = mapped_column(String(200))  # guest's words, to the host
+    traveler_account_id: Mapped[UUID | None] = mapped_column(ForeignKey("user_accounts.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
