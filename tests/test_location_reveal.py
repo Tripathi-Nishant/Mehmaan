@@ -19,7 +19,9 @@ MAP = "https://www.google.com/maps?q=26.9239,75.8267"
 
 
 def booking(status):
-    return SimpleNamespace(status=status, access_token="tok")
+    return SimpleNamespace(
+        status=status, access_token="tok", guests=2, amount_paise=240000, host_payout_paise=0
+    )
 
 
 def test_confirmed_booking_reveals_map_and_english_landmark():

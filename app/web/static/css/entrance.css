@@ -1,0 +1,68 @@
+/* Welcome door, ported from design-ref DoorEntrance (GSAP timeline -> CSS, 4.4s).
+   Pixel geometry of haveli-door.webp (1920x1088): leaves span x 595..958..1330, y 330..998. */
+.door { display: none; position: fixed; inset: 0; z-index: 100; overflow: hidden; }
+html.door-pending .door { display: block; }
+html.door-pending body { overflow: hidden; }
+
+/* Stage keeps the photo's aspect ratio and covers the screen */
+.door-box { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: max(100vw, calc(100vh * 1920 / 1088)); height: max(100vh, calc(100vw * 1088 / 1920)); }
+.door-stage { position: absolute; inset: 0; transform-origin: 50.13% 61.03%; }
+/* frame keeps everything except the doorway, so the page shows through when the doors open */
+.door-frame { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none;
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, 31.09% 30.51%, 69.17% 30.51%, 69.17% 91.64%, 31.09% 91.64%, 31.09% 30.51%); }
+.door-way { position: absolute; left: 30.99%; top: 30.33%; width: 38.28%; height: 61.4%; perspective: 1400px; }
+.door-glow { position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(70% 60% at 50% 55%, oklch(0.97 0.06 88 / 0.95), oklch(0.85 0.12 80 / 0.55) 45%, transparent 80%); }
+.door-leaves { position: absolute; inset: 0; display: flex; padding: 0; border: 0; background: none; cursor: pointer; transform-style: preserve-3d; }
+.door-leaf { position: relative; height: 100%; backface-visibility: hidden; background: url("/static/img/haveli-door.webp") no-repeat;
+  transition: transform 2.8s cubic-bezier(0.45, 0, 0.55, 1); }
+.door-leaf.left { width: 49.39%; transform-origin: left center; background-size: 528.93% 162.87%; background-position: 38.21% 78.57%; transition-delay: 0.95s; }
+.door-leaf.right { width: 50.61%; transform-origin: right center; background-size: 516.13% 162.87%; background-position: 61.89% 78.57%; transition-delay: 1s; }
+.door-shade { position: absolute; inset: 0; opacity: 0; transition: opacity 2.6s linear 1s; }
+.left .door-shade { background: linear-gradient(90deg, oklch(0.15 0.03 40 / 0.2), oklch(0.12 0.03 40 / 0.85)); }
+.right .door-shade { background: linear-gradient(270deg, oklch(0.15 0.03 40 / 0.2), oklch(0.12 0.03 40 / 0.85)); }
+
+/* Welcome UI */
+.door-ui { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;
+  transition: opacity 450ms ease-out, transform 450ms ease-out; }
+.door-top { padding: 72px 24px 64px; text-align: center; background: linear-gradient(to bottom, oklch(0.25 0.073 21.8 / 0.8), oklch(0.25 0.073 21.8 / 0.3), transparent); }
+.door-top .eyebrow { color: oklch(0.846 0.106 88.3 / 0.9); }
+.door-name { margin-top: var(--s-75); font: 400 clamp(2.25rem, 1.8rem + 2vw, 3rem)/1.15 var(--font-display); color: var(--parchment-light); }
+.door-bottom { display: flex; flex-direction: column; align-items: center; gap: var(--s-100); padding: 96px 24px 40px; text-align: center;
+  background: linear-gradient(to top, oklch(0.25 0.073 21.8 / 0.85), oklch(0.25 0.073 21.8 / 0.4), transparent); }
+.door-bottom p { font-size: 14px; color: oklch(0.957 0.027 85.7 / 0.8); }
+.door-cta { pointer-events: auto; padding: 0 36px; font-size: 18px; animation: door-knock 2.2s ease-in-out infinite; }
+.door-cta [lang="hi"] { font: 400 20px/1 var(--font-display); }
+.door-skip { position: absolute; top: 16px; right: 16px; height: 40px; padding: 0 16px; border: 1px solid oklch(0.731 0.115 85.2 / 0.5); border-radius: var(--r-full);
+  background: oklch(0.25 0.073 21.8 / 0.6); color: var(--gold-bright); font: 600 14px/1 var(--font-body); cursor: pointer; backdrop-filter: blur(4px); }
+.door-skip:hover { background: oklch(0.25 0.073 21.8 / 0.8); }
+.door :focus-visible { outline-color: var(--gold-bright); }
+@media (min-width: 640px) { .door-top { padding-top: 24px; } }
+
+/* Opening timeline */
+.door.opening { animation: door-fade 4.4s linear forwards; }
+.door.opening .door-ui { opacity: 0; transform: translateY(16px); }
+.door.opening .door-stage { animation: door-walk 4.4s forwards; }
+.door.opening .door-leaf.left { transform: rotateY(86deg); }
+.door.opening .door-leaf.right { transform: rotateY(-86deg); }
+.door.opening .door-shade { opacity: 0.75; }
+.door.opening .door-glow { animation: door-glow 4.4s linear forwards; }
+.door.closing { opacity: 0; transition: opacity 400ms ease-out; }
+
+@keyframes door-walk {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  25% { transform: scale(1.08); }
+  66% { transform: scale(1.08); animation-timing-function: cubic-bezier(0.55, 0.06, 0.68, 0.19); }
+  100% { transform: scale(5.2); }
+}
+@keyframes door-glow { 0%, 27% { opacity: 0; } 59%, 82% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes door-fade { 0%, 87.5% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes door-knock { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .door.opening { animation: none; opacity: 0; transition: opacity 600ms !important; }
+  .door.opening .door-stage, .door.opening .door-glow { animation: none !important; }
+  .door.opening .door-leaf { transform: none; }
+  .door.closing { transition-duration: 600ms !important; }
+}

@@ -1,16 +1,234 @@
 {% extends "base.html" %}
 {% block title %}{{ listing.title_en or listing.description_hi }} · Mehmaan{% endblock %}
-{% block content %}
-<p><a href="/">← All experiences</a></p>{% if payment_failed %}<p class="card" role="alert">TEST payment failed. No money was taken and your seats were released. You can choose a date and try again.</p>{% endif %}<article class="card">
-<p class="muted">{{ listing.category }} · {{ listing.city }}</p><h1>{{ listing.title_en or listing.description_hi }}</h1><p>{{ listing.area }}</p>{% if listing.description_en %}<p>{{ listing.description_en }}</p>{% endif %}
-<p class="price">₹{{ '{:,}'.format(listing.price_per_person_paise // 100) }} per person</p><p>Demo host (role-play) · verification badge: demo</p>
-<p class="muted">Location shared · map pin and landmark are shared only after host confirmation.</p>
-<p class="muted">Cancellation: full refund up to 48 hours before; 80% refund after that.</p>
-{% if slots %}<h3>Book this experience</h3><p class="muted">A seat is held temporarily only while TEST payment is completed. It becomes a confirmed booking only after successful payment; failed or expired payment releases the seat.</p>
-<form method="post" action="/book" style="flex-direction:column;align-items:stretch">
-<fieldset><legend>Choose a date (India time)</legend>
-{% for slot in slots %}{% set left = slot.capacity - slot.booked_count %}<label style="display:block;margin:6px 0"><input type="radio" name="slot_id" value="{{ slot.id }}" required{% if loop.first %} checked{% endif %}> {{ slot.starts_at | ist }} · {{ left }} seat{{ '' if left == 1 else 's' }} left</label>
-{% endfor %}</fieldset>
-<label>Name <input name="name" required></label><label>Email <input name="email" type="email" required></label><label>Guests <input name="guests" type="number" min="1" max="{{ listing.max_guests or 1 }}" value="1" required></label><button>Continue to TEST payment</button></form>
-{% else %}<p class="muted">No upcoming dates right now. Please check back soon.</p>{% endif %}</article>
+{% block head %}
+<style>
+  .lst { padding: var(--s-400) 0 var(--s-800); }
+  .back { display: inline-flex; align-items: center; gap: var(--s-75); min-height: 44px; color: var(--maroon); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .back:hover { text-decoration: underline; }
+  .alert { display: flex; gap: var(--s-100); margin: var(--s-200) 0; padding: var(--s-200) var(--s-300); border: 1px solid var(--err-fg); border-radius: var(--radius); background: var(--err-bg); color: var(--err-fg); }
+  .alert i { font-size: 22px; }
+  .lst-head { margin: var(--s-200) 0 var(--s-400); }
+  .lst-head .badges { display: flex; flex-wrap: wrap; gap: var(--s-50); margin-bottom: var(--s-200); }
+  .lst-head h1 { max-width: 22ch; color: var(--maroon); }
+  .lst-head .by { margin-top: var(--s-100); color: var(--text-muted); font-size: 19px; }
+
+  /* Gallery: arch-framed (DESIGN §5); real photos replace the placeholders */
+  .gallery { display: grid; grid-template-columns: 1.3fr 1fr; gap: var(--s-200); margin-bottom: var(--s-600); }
+  .pic { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: var(--r-2xl); color: var(--gold-bright); background: var(--gradient-maroon); box-shadow: var(--shadow-card); }
+  .pic::before { content: ""; position: absolute; inset: 0; background: var(--pattern); background-size: 52px 52px; opacity: 0.35; }
+  .pic i { position: relative; font-size: 64px; }
+  .pic .soon { position: absolute; left: var(--s-100); bottom: var(--s-100); padding: var(--s-25) var(--s-100); border-radius: var(--r-full); background: oklch(0.25 0.073 21.8 / 0.85); color: var(--gold-bright); }
+  .main-frame { box-shadow: var(--shadow-lift); }
+  .pic.main { aspect-ratio: 100 / 115; border-radius: 0; box-shadow: none; }
+  .pic.main .hi { position: relative; font: 400 clamp(3.5rem, 2rem + 5vw, 6rem)/1.2 var(--font-display); }
+  .pic.main .soon { left: 50%; transform: translateX(-50%); bottom: var(--s-300); }
+  .side { display: grid; grid-template-rows: 1fr 1fr; gap: var(--s-200); }
+  .alt2 { background: radial-gradient(120% 90% at 70% 40%, oklch(0.4 0.07 264), var(--indigo) 60%); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--s-700); align-items: start; }
+  .block + .block { margin-top: var(--s-600); padding-top: var(--s-600); border-top: 1px solid var(--line); }
+  .block h2 { margin-bottom: var(--s-200); color: var(--maroon); }
+  .block > p { max-width: 65ch; }
+  .facts { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-300); margin: 0; }
+  .facts li { display: grid; grid-template-columns: 28px 1fr; gap: var(--s-100); }
+  .facts i { font-size: 24px; color: var(--blockred); }
+  .facts strong { display: block; font-weight: 600; }
+  .facts .d { color: var(--text-muted); }
+  .expect { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-200); }
+  .expect li { display: grid; grid-template-columns: 48px 1fr; gap: var(--s-200); align-items: baseline; }
+  .expect .num { font: 400 36px/1 var(--font-display); color: var(--primary); }
+  .host { display: grid; grid-template-columns: 120px 1fr; gap: var(--s-300); align-items: center; }
+  .host-ph { aspect-ratio: 100 / 130; -webkit-mask: var(--arch) center / 100% 100% no-repeat; mask: var(--arch) center / 100% 100% no-repeat; background: var(--maroon) var(--pattern); display: grid; place-items: center; color: var(--night-text); font: 400 40px/1 var(--font-display); }
+  .host .name { font: 400 28px/1.2 var(--font-display); color: var(--text); }
+  .host p { margin-top: var(--s-75); color: var(--text-muted); max-width: 52ch; }
+  .rules { margin-top: var(--s-100); }
+  .rules p { display: flex; justify-content: space-between; gap: var(--s-200); padding: var(--s-100) 0; border-bottom: 1px solid var(--line); }
+
+  /* Booking panel */
+  .book { position: sticky; top: 112px; padding: var(--s-400) var(--s-300); background: var(--surface); border-radius: var(--r-2xl); box-shadow: var(--shadow-lift), 0 0 0 1px var(--border); border-top: 4px solid var(--gold); }
+  .book .price { color: var(--maroon); font-size: 34px; line-height: 1.1; }
+  .book .price small { font-family: var(--font-body); }
+  .book .price small { font-size: 16px; font-weight: 400; color: var(--text-muted); }
+  .book form { display: grid; gap: var(--s-300); margin-top: var(--s-300); }
+  .book fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+  .book legend, .field label { display: block; margin-bottom: var(--s-75); font-size: 15px; font-weight: 600; }
+  .slots { display: grid; gap: var(--s-75); max-height: 264px; overflow-y: auto; padding: var(--s-25); }
+  .slot { display: flex; align-items: center; gap: var(--s-100); min-height: 48px; padding: var(--s-75) var(--s-200); border: 1px solid var(--line); border-radius: var(--r-xl); cursor: pointer; font-size: 15px; transition: border-color 300ms var(--ease), background-color 300ms var(--ease); }
+  .slot:hover { border-color: var(--maroon); }
+  .slot:has(input:focus-visible) { outline: 2px solid var(--maroon); outline-offset: 2px; }
+  .slot.on { border-color: var(--maroon); background: var(--paper); box-shadow: inset 3px 0 0 var(--gold); }
+  .slot input { width: 18px; height: 18px; margin: 0; }
+  .field input, .field textarea { width: 100%; min-height: 48px; padding: var(--s-100) var(--s-200); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); font: inherit; color: var(--text); }
+  .field textarea { min-height: 88px; resize: vertical; }
+  .field input:focus-visible, .field textarea:focus-visible { outline-offset: 1px; border-color: var(--maroon); }
+  .field input:user-invalid { border-color: var(--err-fg); }
+  .field .hint { display: flex; justify-content: space-between; margin-top: var(--s-50); font-size: 13px; color: var(--text-muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-200); }
+  .sum { display: grid; gap: var(--s-75); padding: var(--s-200) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .sum p { display: flex; justify-content: space-between; }
+  .sum .total { font-weight: 700; font-size: 19px; }
+  .book .btn { width: 100%; }
+  .test { display: flex; gap: var(--s-75); align-items: center; padding: var(--s-75) var(--s-100); border-radius: var(--r-lg); background: var(--wait-bg); color: var(--wait-fg); font-size: 14px; font-weight: 500; }
+  .none { padding: var(--s-300); border-radius: var(--radius); background: var(--paper); text-align: center; color: var(--text-muted); }
+  .mobile-cta { display: none; }
+
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; gap: var(--s-600); }
+    .book { position: static; }
+  }
+  @media (max-width: 640px) {
+    .gallery { grid-template-columns: 1fr; }
+    .side { grid-template-rows: none; grid-template-columns: 1fr 1fr; }
+    .side .pic { aspect-ratio: 4 / 3; }
+    .side .pic i { display: none; }
+    .side .pic .soon { left: var(--s-75); right: var(--s-75); bottom: var(--s-75); text-align: center; border-radius: var(--r-xl); font-size: 11px; }
+    .facts { grid-template-columns: 1fr; }
+    .host { grid-template-columns: 88px 1fr; gap: var(--s-200); }
+    .book { padding: var(--s-300) var(--s-200); }
+    .mobile-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: var(--s-200); padding: var(--s-100) var(--s-200); background: oklch(0.928 0.037 84.6 / 0.96); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+    .mobile-cta .btn { flex: none; }
+    body { padding-bottom: 76px; }
+  }
+</style>
+{% endblock %}
+
+{% block main %}
+{% set icons = {"food": "ph-cooking-pot", "craft": "ph-paint-brush", "music": "ph-music-notes", "culture": "ph-flower-lotus"} %}
+{% set cat = listing.category if listing.category in icons else "culture" %}
+{% set cat_hi = {"food": "रसोई", "craft": "कला", "music": "संगीत", "culture": "संस्कृति"} %}
+{% set host_name = host.display_name if host and host.display_name else none %}
+{% set doing = {"food": "Cook together", "craft": "Make it together", "music": "Make music together", "culture": "Share the customs"}[cat] %}
+{% set ending = {"food": "Sit down and eat what you made, with the family.", "craft": "Finish your piece and take it home with you.", "music": "End with a song together over chai.", "culture": "Ask anything, then say goodbye at the door."}[cat] %}
+{% set rupees = listing.price_per_person_paise // 100 %}
+<main id="main" class="lst">
+  <div class="wrap">
+    <a class="back" href="/#experiences"><i class="ph ph-arrow-left" aria-hidden="true"></i>All experiences</a>
+    {% if payment_failed %}<p class="alert" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i><span>TEST payment failed. No money was taken and your seats were released. Choose a date and try again.</span></p>{% endif %}
+
+    <header class="lst-head">
+      <div class="badges">
+        <span class="badge badge-cat">{{ listing.category | capitalize }}</span>
+        {% if listing.is_demo_roleplay %}<span class="badge badge-wait"><i class="ph ph-masks-theater" aria-hidden="true"></i>Demo host (role-play)</span>{% endif %}
+        {% if listing.location_shared %}<span class="badge badge-ok"><i class="ph ph-map-pin" aria-hidden="true"></i>Location shared</span>{% endif %}
+      </div>
+      <h1 class="t-page">{{ listing.title_en or listing.description_hi }}</h1>
+      <p class="by">{% if host_name %}Hosted by {{ host_name }} ji, at home in {% else %}Hosted at home in {% endif %}{{ listing.area }}, {{ listing.city }}</p>
+    </header>
+
+    <div class="gallery" aria-label="Photos">
+      <div class="arch-frame main-frame"><div class="arch-inner"><div class="pic main arch"><span class="hi" lang="hi" aria-hidden="true">{{ cat_hi[cat] }}</span><span class="soon t-label">Photo coming soon</span></div></div></div>
+      <div class="side">
+        <div class="pic alt1"><i class="ph ph-house-line" aria-hidden="true"></i><span class="soon t-label">Home photo coming soon</span></div>
+        <div class="pic alt2"><i class="ph ph-hand-heart" aria-hidden="true"></i><span class="soon t-label">Host photo coming soon</span></div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div>
+        <section class="block" aria-labelledby="about-title">
+          <h2 id="about-title" class="t-sub">About this experience</h2>
+          {% if listing.description_en %}<p class="t-body">{{ listing.description_en }}</p>{% endif %}
+          <ul class="facts" style="margin-top:var(--s-400)">
+            {% if listing.duration_min %}{% set h, m = listing.duration_min // 60, listing.duration_min % 60 %}
+            <li><i class="ph ph-clock" aria-hidden="true"></i><span><strong>Duration</strong><span class="d">{% if h %}{{ h }} hour{{ "" if h == 1 else "s" }}{% endif %}{% if h and m %} {% endif %}{% if m %}{{ m }} minutes{% endif %}</span></span></li>{% endif %}
+            {% if listing.max_guests %}<li><i class="ph ph-users" aria-hidden="true"></i><span><strong>Group size</strong><span class="d">Up to {{ listing.max_guests }} guest{{ "" if listing.max_guests == 1 else "s" }}</span></span></li>{% endif %}
+            {% if listing.food_type %}<li><i class="ph ph-leaf" aria-hidden="true"></i><span><strong>Food</strong><span class="d">{{ "Vegetarian" if listing.food_type == "veg" else "Non vegetarian" }}</span></span></li>{% endif %}
+            <li><i class="ph ph-bowl-food" aria-hidden="true"></i><span><strong>Dietary needs</strong><span class="d">Tell your host about allergies or diet when you book.</span></span></li>
+            <li><i class="ph ph-map-pin" aria-hidden="true"></i><span><strong>Where</strong><span class="d">{{ listing.area }}, {{ listing.city }}. The exact location is shared after your host confirms.</span></span></li>
+            <li><i class="ph ph-translate" aria-hidden="true"></i><span><strong>Language</strong><span class="d">Your host speaks Hindi. A text translation helper is on your booking page.</span></span></li>
+          </ul>
+        </section>
+
+        <section class="block" aria-labelledby="expect-title">
+          <h2 id="expect-title" class="t-sub">What to expect</h2>
+          <ol class="expect">
+            <li><span class="num" lang="hi" aria-hidden="true">१</span><div><h3 class="t-card">Arrive and meet the family</h3><p class="t-body muted">Your host welcomes you at the door you will see on your booking page.</p></div></li>
+            <li><span class="num" lang="hi" aria-hidden="true">२</span><div><h3 class="t-card">{{ doing }}</h3><p class="t-body muted">{{ listing.description_en or "Spend the time together, at the family's pace." }}</p></div></li>
+            <li><span class="num" lang="hi" aria-hidden="true">३</span><div><h3 class="t-card">Finish together</h3><p class="t-body muted">{{ ending }}</p></div></li>
+          </ol>
+        </section>
+
+        <section class="block" aria-labelledby="host-title">
+          <h2 id="host-title" class="t-sub">Meet your host</h2>
+          <div class="host">
+            <div class="host-ph" aria-hidden="true"><span lang="hi">{{ (host_name or "म")[0] }}</span></div>
+            <div>
+              <p class="name">{{ host_name ~ " ji" if host_name else "Your host" }}</p>
+              <p class="t-body">{{ host_name or "Your host" }} described this experience in Hindi, in their own words. We wrote this English version and read it back to them before it went live.</p>
+              {% if listing.is_demo_roleplay %}<p class="t-small">During this demo, this host is played by our team.</p>{% endif %}
+            </div>
+          </div>
+        </section>
+
+        <section class="block" aria-labelledby="rules-title">
+          <h2 id="rules-title" class="t-sub">Cancellation and refunds</h2>
+          <div class="rules t-body">
+            <p><span>Cancel 48 hours or more before</span><strong>Full refund</strong></p>
+            <p><span>Cancel later than that</span><strong>80% back, host keeps 20%</strong></p>
+            <p><span>Host cannot host you</span><strong>Full refund</strong></p>
+          </div>
+          <p class="t-small" style="margin-top:var(--s-200)"><a href="/cancellation-policy">Read the full cancellation policy</a></p>
+        </section>
+      </div>
+
+      <aside class="book" id="book" aria-labelledby="book-title">
+        <h2 id="book-title" class="sr-only">Book this experience</h2>
+        <p class="price">₹{{ '{:,}'.format(rupees) }} <small>per person</small></p>
+        {% if slots %}
+        <form method="post" action="/book" data-price="{{ rupees }}">
+          <fieldset>
+            <legend>Choose a date (India time)</legend>
+            <div class="slots">
+              {% for slot in slots %}{% set left = slot.capacity - slot.booked_count %}
+              <label class="slot{% if loop.first %} on{% endif %}"><input type="radio" name="slot_id" value="{{ slot.id }}" data-left="{{ left }}" required{% if loop.first %} checked{% endif %}><span>{{ slot.starts_at | ist }} · {{ left }} seat{{ '' if left == 1 else 's' }} left</span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          <div class="field"><label for="name">Your name</label><input id="name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required><p class="hint"><span>Your booking link and updates come here.</span></p></div>
+          <div class="field"><label for="guests">Guests</label><input id="guests" name="guests" type="number" inputmode="numeric" min="1" max="{{ listing.max_guests or 1 }}" value="1" required></div>
+          <div class="field"><label for="dietary">Dietary needs or allergies <span class="muted">(optional)</span></label><textarea id="dietary" name="dietary" maxlength="200" placeholder="For example: vegetarian, no peanuts"></textarea><p class="hint"><span>Your host hears this with your request.</span><span data-count>0 / 200</span></p></div>
+          <div class="sum" aria-live="polite">
+            <p><span>₹{{ '{:,}'.format(rupees) }} × <span data-guests>1</span> guest<span data-plural></span></span><span data-total>₹{{ '{:,}'.format(rupees) }}</span></p>
+            <p class="total"><span>Total</span><span data-total>₹{{ '{:,}'.format(rupees) }}</span></p>
+          </div>
+          <p class="test"><i class="ph ph-receipt" aria-hidden="true"></i>TEST payment. No real money will be charged.</p>
+          <button class="btn btn-primary" type="submit">Book This Experience</button>
+        </form>
+        {% else %}
+        <p class="none" style="margin-top:var(--s-300)">No upcoming dates right now. Please check back soon.</p>
+        {% endif %}
+      </aside>
+    </div>
+  </div>
+  {% if slots %}<div class="mobile-cta"><p><strong>₹{{ '{:,}'.format(rupees) }}</strong> <span class="muted">per person</span></p><a class="btn btn-primary" href="#book">Book This Experience</a></div>{% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const form = document.querySelector("form[data-price]");
+  if (!form) return;
+  const price = Number(form.dataset.price);
+  const guests = form.querySelector("#guests");
+  const maxGroup = Number(guests.max);
+  const inr = (n) => "₹" + n.toLocaleString("en-IN");
+  const update = () => {
+    const picked = form.querySelector("input[name=slot_id]:checked");
+    form.querySelectorAll(".slot").forEach((l) => l.classList.toggle("on", l.contains(picked)));
+    // guests can't exceed the group size or the seats left on the chosen date
+    guests.max = String(Math.min(maxGroup, Number(picked?.dataset.left || maxGroup)));
+    const n = Math.max(1, Math.min(Number(guests.value) || 1, Number(guests.max)));
+    form.querySelector("[data-guests]").textContent = n;
+    form.querySelector("[data-plural]").textContent = n === 1 ? "" : "s";
+    form.querySelectorAll("[data-total]").forEach((el) => (el.textContent = inr(price * n)));
+  };
+  form.addEventListener("input", update);
+  form.addEventListener("change", update);
+  const notes = form.querySelector("#dietary"), count = form.querySelector("[data-count]");
+  notes.addEventListener("input", () => (count.textContent = `${notes.value.length} / 200`));
+  update();
+})();
+</script>
 {% endblock %}

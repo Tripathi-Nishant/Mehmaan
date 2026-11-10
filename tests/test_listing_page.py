@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -40,7 +41,16 @@ def test_one_option_per_slot_with_ist_time_and_seats():
     assert "Sat 14 Nov, 11:00 AM · 4 seats left" in html
     assert "Sun 15 Nov, 11:00 AM · 1 seat left" in html
     assert 'action="/book"' in html
-    assert html.count("checked") == 1
+    assert len(re.findall(r"<input[^>]*\schecked[\s>]", html)) == 1  # first date preselected
+
+
+def test_booking_form_has_optional_dietary_field_and_host_name():
+    host = SimpleNamespace(display_name="Meena")
+    html = templates.get_template("listing.html").render(
+        listing=LISTING, host=host, slots=[slot(14)]
+    )
+    assert 'name="dietary"' in html and 'maxlength="200"' in html
+    assert "Meena ji" in html
 
 
 def test_no_slots_message():

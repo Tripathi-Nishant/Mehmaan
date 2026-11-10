@@ -1,0 +1,26 @@
+{% extends "info.html" %}
+{% block title %}About Mehmaan{% endblock %}
+{% block description %}Why Mehmaan exists: helping Indian families welcome travellers into their homes, in their own language.{% endblock %}
+{% block heading %}About Mehmaan{% endblock %}
+{% block intro %}<span lang="hi">मेहमान</span> means guest. We help Indian families welcome travellers into their homes.{% endblock %}
+{% block body %}
+<h2 lang="hi">अतिथि देवो भव</h2>
+<p>Atithi Devo Bhava: in India, the guest is God. It is a value shared across families and communities, not a ritual. Millions of homes live it every day, yet you cannot find them online.</p>
+<p>Many of these families cook, make crafts or play music that travellers would love to share. What stops them is not hospitality. It is typing, English and apps.</p>
+
+<h2>How families join</h2>
+<p>Hosts join through our Telegram bot, in Hindi, without typing or installing anything. They tell us what they offer, when, for how many guests and at what price. We turn that into the English listing you read on this site, and read it back to them before it goes live.</p>
+<p>Hosts also share a map pin and a photo of their gate with us. You only see the pin after the host confirms your booking, and the gate photo is never shown publicly.</p>
+
+<h2>How guests book</h2>
+<ul>
+  <li>Pick an experience, a date and the number of guests.</li>
+  <li>Pay the full price up front. Your seats are held for {{ hold_minutes }} minutes while you pay.</li>
+  <li>Your host says yes or no. If they cannot reply within {{ reply_hours }} hours, you get a full refund automatically.</li>
+  <li>Once confirmed, your booking page and email show the map pin and a landmark near the door.</li>
+</ul>
+
+<h2>Honest by design</h2>
+<p>We show one fixed price, the same <a href="/cancellation-policy">cancellation rules</a> for every home, and no invented reviews or numbers.</p>
+<p class="note">This is a demo built for a challenge. Payments are TEST payments and no real money moves. The hosts you see are played by our team and are labelled "Demo host (role-play)".</p>
+{% endblock %}

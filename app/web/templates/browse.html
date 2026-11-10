@@ -1,4 +1,204 @@
-{% extends "base.html" %}{% block title %}Discover local experiences · Mehmaan{% endblock %}
-{% block content %}<h1>Meet India through local hosts.</h1><p class="muted">Food, craft and culture experiences created by hosts in their own voice.</p>
-<form method="get"><input name="q" value="{{ q }}" placeholder="Try food in Jaipur or crafts near the old city"><button>Search</button></form>
-{% if listings %}<div class="grid">{% for listing in listings %}<article class="card"><p class="muted">{{ listing.category }} · {{ listing.city }}</p><h2><a href="/listings/{{ listing.id }}">{{ listing.title_en or listing.description_hi }}</a></h2><p>{{ listing.area }} · Demo host (role-play)</p><p class="price">₹{{ '{:,}'.format(listing.price_per_person_paise // 100) }} per person</p><p class="muted">Verified demo listing · TEST experience</p></article>{% endfor %}</div>{% else %}<p>No live experiences matched that search.</p>{% endif %}{% endblock %}
+{% extends "base.html" %}
+{% block title %}Mehmaan · Aaiye, padhariye. Be a guest in an Indian home{% endblock %}
+{% block head %}
+<link rel="preload" as="image" href="/static/img/pichwai-gopis.webp" type="image/webp">
+<link rel="stylesheet" href="/static/css/entrance.css">
+<link rel="preload" as="image" href="/static/img/haveli-door.webp" type="image/webp">
+{% if not q.strip() and not show_all %}<script>try { if (!sessionStorage.getItem("mehmaan:entered")) document.documentElement.classList.add("door-pending"); } catch (e) {}</script>{% endif %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"Is the payment real?","acceptedAnswer":{"@type":"Answer","text":"No. Every booking on this site is a TEST booking and no real money moves."}},
+{"@type":"Question","name":"Can I cancel?","acceptedAnswer":{"@type":"Answer","text":"Yes, from your booking page before the start time. Cancel 48 hours or more before and you get the full amount back. Later than that, you get 80% back and your host keeps 20%."}},
+{"@type":"Question","name":"When do I get the address?","acceptedAnswer":{"@type":"Answer","text":"Once your host confirms. Your booking page then shows the map pin and a landmark near the door."}}
+]}
+</script>
+{% endblock %}
+
+{% block main %}
+{% set cat_hi = {"food": "रसोई", "craft": "कला", "music": "संगीत", "culture": "संस्कृति"} %}
+{% set icons = {"food": "ph-cooking-pot", "craft": "ph-paint-brush", "music": "ph-music-notes", "culture": "ph-flower-lotus"} %}
+{% set current = q.strip().lower() %}
+{% if not q.strip() and not show_all %}{% include "partials/entrance.html" %}{% endif %}
+<main id="main" tabindex="-1">
+  <section id="top" class="hero maroon-glow on-dark" data-hero aria-labelledby="hero-title">
+    {% for c in ("tl", "tr", "bl", "br") %}<span class="mandala {{ c }}" aria-hidden="true"></span>{% endfor %}
+    <div class="wrap hero-grid">
+      <div data-hero-text>
+        <p class="eyebrow hero-eyebrow"><span lang="hi">अतिथि देवो भव</span> · Atithi Devo Bhava</p>
+        <h1 id="hero-title" class="t-hero text-gold-sheen" lang="hi">आइए, पधारिए</h1>
+        <p class="hero-welcome">Aaiye, padhariye: come in, you are welcome.</p>
+        <p class="hero-lede">Discover the warmth of Indian homes and their traditions, opened to you by the families who live in them.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-gold" href="#experiences">Find an experience</a>
+          <a class="btn btn-ghost-gold" href="#hosts">Open your home</a>
+        </div>
+      </div>
+      <figure class="hero-art" data-hero-art>
+        <div class="arch-frame"><div class="arch-inner"><div class="arch hero-pic">
+          <img data-parallax src="/static/img/pichwai-gopis.webp" width="900" height="1248" fetchpriority="high"
+               alt="Pichhavai temple cloth: four women beneath a flowering tree on an indigo, star-scattered ground">
+        </div></div></div>
+      </figure>
+    </div>
+  </section>
+
+  <div class="block-border" aria-hidden="true"></div>
+
+  <section id="experiences" class="section" aria-labelledby="xp-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="xp-title" class="t-page">Homes that are expecting you</h2>
+        <p class="muted">Every experience happens in a family's home. Pick one to see the dates.</p>
+      </div>
+      <div class="filters">
+        <form class="search" method="get" action="/#experiences" role="search">
+          <label for="q" class="sr-only">Search experiences</label>
+          <input id="q" name="q" value="{{ q }}" placeholder="Search food, craft, a city or an area" autocomplete="off">
+          <button class="btn btn-maroon" type="submit"><i class="ph ph-magnifying-glass" aria-hidden="true"></i>Search</button>
+        </form>
+        <nav class="chip-row" aria-label="Categories">
+          <a class="chip" href="/#experiences"{% if not current %} aria-current="page"{% endif %}>All</a>
+          {% for cat, label in [("food", "Food"), ("craft", "Craft"), ("music", "Music"), ("culture", "Culture")] %}
+          <a class="chip" href="/?q={{ cat }}#experiences"{% if current == cat %} aria-current="page"{% endif %}><i class="ph {{ icons[cat] }}" aria-hidden="true"></i>{{ label }}</a>
+          {% endfor %}
+        </nav>
+        {% if cities %}
+        <nav class="chip-row" aria-label="Cities">
+          <span class="eyebrow chip-label">Where</span>
+          {% for city in cities %}
+          <a class="chip" href="/?q={{ city | urlencode }}#experiences"{% if current == city.lower() %} aria-current="page"{% endif %}><i class="ph ph-map-pin" aria-hidden="true"></i>{{ city }}</a>
+          {% endfor %}
+        </nav>
+        {% endif %}
+      </div>
+
+      {% if listings %}
+      <div class="xp-grid">
+        {% for listing in listings %}
+        {% set cat = listing.category if listing.category in icons else "culture" %}
+        <article class="xp card-lift" data-card>
+          <div class="xp-media">
+            {% if photos[listing.id] %}
+            <div class="arch-frame thin"><div class="xp-art xp-photo arch">
+              <img src="/media/{{ photos[listing.id] }}" alt="Photo of {{ listing.title_en or listing.description_hi }}" loading="lazy">
+            </div></div>
+            {% else %}
+            <div class="arch-frame thin"><div class="xp-art arch">
+              <span class="xp-hi" lang="hi" aria-hidden="true">{{ cat_hi[cat] }}</span>
+              <span class="xp-soon">Host photo coming soon</span>
+            </div></div>
+            {% endif %}
+            {% if listing.is_demo_roleplay %}<span class="badge badge-demo xp-demo">Demo host (role-play)</span>{% endif %}
+          </div>
+          <div class="xp-body">
+            <p class="eyebrow xp-eyebrow"><span lang="hi">{{ cat_hi[cat] }}</span> · {{ listing.category | capitalize }}</p>
+            <h3 class="t-card"><a href="/listings/{{ listing.id }}">{{ listing.title_en or listing.description_hi }}</a></h3>
+            <p class="t-small muted">Hosted at home in {{ listing.area }}, {{ listing.city }}</p>
+            {% if listing.location_shared %}<p class="xp-badges"><span class="badge badge-ok"><i class="ph ph-map-pin" aria-hidden="true"></i>Location shared</span></p>{% endif %}
+            <div class="xp-foot">
+              <ul class="xp-meta">
+                <li><i class="ph ph-map-pin" aria-hidden="true"></i>{{ listing.city }}</li>
+                {% if listing.duration_min %}{% set h, m = listing.duration_min // 60, listing.duration_min % 60 %}
+                <li><i class="ph ph-clock" aria-hidden="true"></i>{% if h %}{{ h }} hr{% endif %}{% if h and m %} {% endif %}{% if m %}{{ m }} min{% endif %}</li>{% endif %}
+                {% if listing.max_guests %}<li><i class="ph ph-users" aria-hidden="true"></i>Up to {{ listing.max_guests }}</li>{% endif %}
+                {% if listing.food_type %}<li><i class="ph ph-leaf" aria-hidden="true"></i>{{ "Vegetarian" if listing.food_type == "veg" else "Non vegetarian" }}</li>{% endif %}
+              </ul>
+              <p class="xp-price"><span class="price">₹{{ '{:,}'.format(listing.price_per_person_paise // 100) }}</span><span>full price, per person</span></p>
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% if not q.strip() and not show_all %}<p class="see-all"><a class="btn btn-ink" href="/?all=1#experiences">See all experiences</a></p>{% endif %}
+      {% else %}
+      <div class="empty card">
+        <p class="t-sub">No experiences match</p>
+        <p class="muted">Try another word, like food, craft or a city name.</p>
+        <a class="btn btn-ink" href="/#experiences">Show all experiences</a>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="section-lg manifesto" data-manifesto aria-label="Our philosophy">
+    <div class="wrap wrap-narrow">
+      <p class="eyebrow">Our philosophy</p>
+      {% set manifesto = "In India, the guest is God. Millions of homes live this every day: the cooking, the crafts, the stories. Yet you cannot find them online. Mehmaan lets them welcome the world, in their own voice." %}
+      <p class="manifesto-text">{% for w in manifesto.split(" ") %}<span data-word>{{ w }}</span> {% endfor %}</p>
+      <p class="muted">Atithi Devo Bhava is a value shared across Indian families and faiths, not a ritual. Hosts share what they already do at home, the way they already do it.</p>
+    </div>
+  </section>
+
+  <section class="section journey-sec" aria-labelledby="visit-title">
+    <div class="wrap wrap-narrow">
+      <div class="sec-head center">
+        <p class="eyebrow">From the door to “phir aana”</p>
+        <h2 id="visit-title" class="t-page">Treated like a guest, at every step</h2>
+      </div>
+      <div class="journey-wrap" data-journey>
+      <span class="thread" data-thread aria-hidden="true"></span>
+      <ol class="journey">
+        <li data-step><span class="num" aria-hidden="true">1</span><div><p class="eyebrow muted">In a real Indian home</p><p class="home">Met at the door</p></div><div><p class="eyebrow">On Mehmaan</p><p class="site">Pick a date, tell us about any dietary needs, and pay the TEST amount.</p></div></li>
+        <li data-step><span class="num" aria-hidden="true">2</span><div><p class="eyebrow muted">In a real Indian home</p><p class="home">Water offered before anything is asked</p></div><div><p class="eyebrow">On Mehmaan</p><p class="site">Full price and refund rules, shown before you book.</p></div></li>
+        <li data-step><span class="num" aria-hidden="true">3</span><div><p class="eyebrow muted">In a real Indian home</p><p class="home">The family says haan</p></div><div><p class="eyebrow">On Mehmaan</p><p class="site">Once your host confirms, your booking page shows the map pin and a landmark near the door.</p></div></li>
+        <li data-step><span class="num" aria-hidden="true">4</span><div><p class="eyebrow muted">In a real Indian home</p><p class="home">Sharing the day</p></div><div><p class="eyebrow">On Mehmaan</p><p class="site">No shared language? The translation helper on your booking page shows your words in Hindi.</p></div></li>
+        <li data-step><span class="num" aria-hidden="true">5</span><div><p class="eyebrow muted">In a real Indian home</p><p class="home">Seen off at the door: “Phir aana”</p></div><div><p class="eyebrow">On Mehmaan</p><p class="site">“Phir zaroor aana”: please come again.</p></div></li>
+      </ol>
+      </div>
+    </div>
+  </section>
+
+  <div class="block-border" aria-hidden="true"></div>
+
+  <section class="section" aria-labelledby="trust-title">
+    <div class="wrap">
+      <div class="card trust">
+        <div class="sec-head">
+          <p class="eyebrow">Paani pehle: water first</p>
+          <h2 id="trust-title" class="t-page">Your questions, answered before you ask</h2>
+          <p class="muted">In an Indian home, water comes before any question. Here, everything you need to trust a visit comes first.</p>
+        </div>
+        <div class="refund">
+          <p><span>Cancel 48 hours or more before</span><strong>Full refund</strong></p>
+          <p><span>Cancel later than that</span><strong>80% back, host keeps 20%</strong></p>
+        </div>
+        <ul class="trust-grid">
+          <li class="card-dashed" data-trust><i class="ph ph-tag" aria-hidden="true"></i><h3>One fixed price</h3><p>The price per person is what you pay. Nothing extra at the door.</p></li>
+          <li class="card-dashed" data-trust><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><h3>Clear refund rules</h3><p>The same rules for every home, shown before you pay.</p></li>
+          <li class="card-dashed" data-trust><i class="ph ph-map-pin" aria-hidden="true"></i><h3>Address after confirmation</h3><p>You see the map pin once your host confirms.</p></li>
+          <li class="card-dashed" data-trust><i class="ph ph-bowl-food" aria-hidden="true"></i><h3>Your comfort first</h3><p>Dietary notes go to your host before you arrive.</p></li>
+          <li class="card-dashed" data-trust><i class="ph ph-receipt" aria-hidden="true"></i><h3>TEST payments</h3><p>This is a demo. Payments are simulated and no real money moves.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="hosts" class="wrap" aria-labelledby="hosts-title">
+    <div class="host-cta maroon-glow on-dark">
+      <span class="mandala sm tl" aria-hidden="true"></span><span class="mandala sm br" aria-hidden="true"></span>
+      <p class="eyebrow">For families</p>
+      <h2 id="hosts-title" class="t-page">Your home. Your voice.</h2>
+      <p>Families join through our Telegram bot, in Hindi, without typing or installing an app. They tell us what they offer, and we write the English listing you read here.</p>
+      <p class="note">During this demo, hosts are played by our team and labelled role-play.</p>
+      <a class="btn btn-gold" href="/about">How families join</a>
+    </div>
+  </section>
+
+  <section id="faq" class="section" aria-labelledby="faq-title">
+    <div class="wrap wrap-narrow">
+      <div class="sec-head center"><p class="eyebrow">Before you visit</p><h2 id="faq-title" class="t-page">Questions guests ask</h2></div>
+      <div class="faq">
+        <details><summary>Is the payment real? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>No. Every booking on this site is a TEST booking and no real money moves. The checkout page also lets you try a failed payment.</p></details>
+        <details><summary>Can I cancel? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>Yes, from your booking page before the start time. Cancel 48 hours or more before and you get the full amount back. Later than that, you get 80% back and your host keeps 20%. The cancel page shows the exact amount before you confirm.</p></details>
+        <details><summary>When do I get the address? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>Once your host confirms. Your booking page then shows the map pin and a landmark near the door, and you get the same details by email.</p></details>
+        <details><summary>What if my host cannot take my booking? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>If your host says no, or does not answer in time, the booking is cancelled and you get the full amount back automatically.</p></details>
+        <details><summary>I do not speak Hindi. Is that a problem? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>No. Your booking page has a text translation helper: type what you want to say and show your host the Hindi.</p></details>
+        <details><summary>Who are the hosts? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>Local families who share their food, craft, music or culture at home. During this demo, the hosts are played by our team and labelled role-play.</p></details>
+        <details><summary>How many people can come? <i class="ph ph-plus" aria-hidden="true"></i></summary><p>Each experience shows its guest limit, and each date shows how many seats are left.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/entrance.js" defer></script>{% endblock %}

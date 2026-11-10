@@ -1,0 +1,25 @@
+{% extends "info.html" %}
+{% block title %}Cancellation policy · Mehmaan{% endblock %}
+{% block description %}The same cancellation and refund rules for every Mehmaan home: full refund up to 48 hours before, 80% after that.{% endblock %}
+{% block heading %}Cancellation policy{% endblock %}
+{% block intro %}One set of rules for every home, so you know before you book.{% endblock %}
+{% block body %}
+<h2>If you cancel</h2>
+<table>
+  <thead><tr><th scope="col">When you cancel</th><th scope="col">You get back</th></tr></thead>
+  <tbody>
+    <tr><td>48 hours or more before the start</td><td>100%</td></tr>
+    <tr><td>Less than 48 hours before the start</td><td>80%, and your host keeps 20%</td></tr>
+    <tr><td>After the experience has started</td><td>Cannot be cancelled</td></tr>
+  </tbody>
+</table>
+<p style="margin-top:var(--s-200)">Example: a booking of ₹3,000 cancelled the evening before gives you ₹2,400 back, and your host keeps ₹600 for the time and food they prepared. If an amount does not divide evenly, the extra paisa goes to you.</p>
+
+<h2>If your host cannot host you</h2>
+<p>If your host says no, or does not reply within {{ reply_hours }} hours, your booking is cancelled and you get the full amount back automatically.</p>
+
+<h2>How to cancel</h2>
+<p>Open your booking page from the link in your email and choose "Cancel booking". The next screen shows exactly how much you get back before you confirm, and cancelling twice never refunds twice.</p>
+
+<p class="note">This is a demo. Payments and refunds are TEST transactions and no real money moves.</p>
+{% endblock %}

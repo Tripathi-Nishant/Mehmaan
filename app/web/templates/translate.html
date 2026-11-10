@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Language help · Mehmaan{% endblock %}
+{% block head %}
+<meta name="robots" content="noindex">
+<style>
+  .tr { padding: var(--s-500) 0 var(--s-800); }
+  .tr-inner { max-width: 760px; margin: 0 auto; }
+  .tr .back { display: inline-flex; align-items: center; gap: var(--s-75); min-height: 44px; color: var(--secondary); font-weight: 500; }
+  .tr h1 { margin-top: var(--s-200); color: var(--maroon); }
+  .tr .lede { margin-top: var(--s-100); color: var(--text-muted); max-width: 60ch; }
+  .box { margin-top: var(--s-400); padding: var(--s-300); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2xl); box-shadow: var(--shadow); }
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-50); padding: var(--s-50); border-radius: var(--r-full); background: var(--paper); border: 1px solid var(--line); }
+  .who label { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: var(--r-full); cursor: pointer; font-weight: 600; text-align: center; transition: background-color 300ms var(--ease), color 300ms var(--ease); }
+  .who input { position: absolute; opacity: 0; pointer-events: none; }
+  .who label:has(input:focus-visible) { outline: 2px solid var(--secondary); outline-offset: 2px; }
+  .who label.on { background: var(--maroon); color: var(--night-text); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-100); margin-top: var(--s-300); }
+  .row label { font-weight: 600; }
+  .row select { min-height: 44px; padding: var(--s-75) var(--s-200); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); font: inherit; color: var(--text); }
+  .row .dir { color: var(--text-muted); }
+  .msg { margin-top: var(--s-300); }
+  .msg label { display: block; margin-bottom: var(--s-75); font-weight: 600; }
+  .msg textarea { width: 100%; min-height: 112px; padding: var(--s-100) var(--s-200); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); font: inherit; color: var(--text); resize: vertical; }
+  .msg textarea:focus-visible { outline-offset: 1px; border-color: var(--secondary); }
+  .msg .hint { display: flex; justify-content: space-between; margin-top: var(--s-50); font-size: 13px; color: var(--text-muted); }
+  .starters { display: flex; flex-wrap: wrap; gap: var(--s-75); margin-top: var(--s-200); }
+  .starters button { min-height: 40px; padding: var(--s-50) var(--s-200); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--paper); color: var(--text); font: 500 14px/1.4 var(--font-body); cursor: pointer; }
+  .starters button:hover { border-color: var(--maroon); }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-200); margin-top: var(--s-300); }
+  .actions .btn[disabled] { opacity: 0.6; cursor: progress; }
+  .error { color: var(--err-fg); font-weight: 500; }
+  .result { margin-top: var(--s-400); padding: var(--s-300); border-radius: var(--r-2xl); background: var(--paper) var(--grain); border: 1px solid var(--line); }
+  .result .from { color: var(--text-muted); }
+  .result .to { margin-top: var(--s-100); font: 400 30px/1.35 var(--font-display); color: var(--text); overflow-wrap: anywhere; }
+  .result .to:lang(hi) { font-size: 34px; }
+  .result .tools { display: flex; align-items: center; gap: var(--s-200); margin-top: var(--s-200); }
+  .skeleton { height: 1.2em; margin-top: var(--s-100); border-radius: var(--r-md); background: var(--line); animation: shimmer 1.4s var(--ease) infinite alternate; }
+  .skeleton + .skeleton { width: 60%; }
+  @keyframes shimmer { to { opacity: 0.45; } }
+  .history { margin-top: var(--s-600); }
+  .history-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s-200); }
+  .history h2 { font: 400 24px/1.3 var(--font-display); color: var(--maroon); }
+  .history ol { list-style: none; margin: var(--s-200) 0 0; padding: 0; display: grid; gap: var(--s-100); }
+  .history li { padding: var(--s-200); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  .history li .who-tag { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .history li .to { margin-top: var(--s-25); font-size: 19px; }
+  .history .empty { margin-top: var(--s-200); color: var(--text-muted); }
+  .link-btn { min-height: 44px; border: 0; background: none; color: var(--secondary); font: 600 15px/1.4 var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  @media (max-width: 640px) { .box { padding: var(--s-200); } .result .to { font-size: 24px; } .result .to:lang(hi) { font-size: 28px; } .actions .btn { width: 100%; } }
+</style>
+{% endblock %}
+
+{% block main %}
+{% set host_name = (host.display_name ~ " ji") if host and host.display_name else "Your host" %}
+<main id="main" class="tr" data-token="{{ booking.access_token }}" data-host="{{ host_name }}">
+  <div class="wrap tr-inner">
+    <a class="back" href="/b/{{ booking.access_token }}"><i class="ph ph-arrow-left" aria-hidden="true"></i>Back to your booking</a>
+    <h1 class="t-page">Talk with {{ host_name }}</h1>
+    <p class="lede t-body">Type what you want to say and show {{ host_name }} the Hindi. When {{ host_name }} wants to reply, switch sides and let them type in Hindi.</p>
+
+    <form class="box" id="translate-form" novalidate>
+      <fieldset class="who" style="border:0;margin:0">
+        <legend class="sr-only">Who is writing?</legend>
+        <label class="on"><input type="radio" name="side" value="guest" checked>I am writing</label>
+        <label><input type="radio" name="side" value="host">{{ host_name }} is writing</label>
+      </fieldset>
+      <div class="row">
+        <label for="lang">Your language</label>
+        <select id="lang" name="lang">{% for code, name in languages.items() %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select>
+        <span class="dir" data-dir aria-live="polite"></span>
+      </div>
+      <div class="msg">
+        <label for="text" data-text-label>Your message</label>
+        <textarea id="text" name="text" maxlength="500" required></textarea>
+        <p class="hint"><span data-hint>For example: Thank you for having me.</span><span data-count>0 / 500</span></p>
+        <div class="starters" data-starters aria-label="Quick phrases">
+          <button type="button">Namaste. Thank you for having me.</button>
+          <button type="button">This is delicious.</button>
+          <button type="button">May I take a photo?</button>
+          <button type="button">Please show me how.</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit"><i class="ph ph-translate" aria-hidden="true"></i>Translate</button>
+        <p class="error" data-error role="alert"></p>
+      </div>
+    </form>
+
+    <section class="result" data-result hidden aria-live="polite" aria-label="Translation"></section>
+
+    <section class="history" aria-labelledby="hist-title">
+      <div class="history-head">
+        <h2 id="hist-title">Conversation</h2>
+        <button class="link-btn" type="button" data-clear hidden>Clear history</button>
+      </div>
+      <p class="empty" data-empty>Your translations will appear here, newest first. They are kept only in this browser.</p>
+      <ol data-history></ol>
+    </section>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const main = document.querySelector("main[data-token]");
+  const token = main.dataset.token, host = main.dataset.host, key = "mehmaan-chat-" + token;
+  const form = document.getElementById("translate-form");
+  const text = form.querySelector("#text"), lang = form.querySelector("#lang");
+  const errorEl = form.querySelector("[data-error]"), submit = form.querySelector("button[type=submit]");
+  const result = document.querySelector("[data-result]");
+  const list = document.querySelector("[data-history]"), empty = document.querySelector("[data-empty]");
+  const clear = document.querySelector("[data-clear]");
+  const names = Object.fromEntries([...lang.options].map((o) => [o.value, o.textContent]));
+  names.hi = "Hindi";
+
+  const side = () => form.querySelector("input[name=side]:checked").value;
+  const pair = () => side() === "guest" ? [lang.value, "hi"] : ["hi", lang.value];
+  const el = (tag, cls, txt, langAttr) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt) n.textContent = txt;
+    if (langAttr) n.lang = langAttr;
+    return n;
+  };
+
+  const syncSide = () => {
+    form.querySelectorAll(".who label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
+    const [from, to] = pair();
+    form.querySelector("[data-dir]").textContent = `${names[from]} → ${names[to]}`;
+    form.querySelector("[data-text-label]").textContent = side() === "guest" ? "Your message" : `${host}'s message, in Hindi`;
+    form.querySelector("[data-hint]").textContent = side() === "guest" ? "For example: Thank you for having me." : "हिंदी में लिखिए (Type in Hindi)";
+    form.querySelector("[data-starters]").hidden = side() !== "guest";
+    text.lang = from;
+  };
+  form.addEventListener("change", syncSide);
+  text.addEventListener("input", () => (form.querySelector("[data-count]").textContent = `${text.value.length} / 500`));
+  form.querySelectorAll("[data-starters] button").forEach((b) => b.addEventListener("click", () => {
+    text.value = b.textContent; text.dispatchEvent(new Event("input")); text.focus();
+  }));
+
+  // History lives only in this browser.
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(history.slice(0, 50))); } catch (e) {} };
+  const renderHistory = () => {
+    list.replaceChildren(...history.map((h) => {
+      const li = el("li");
+      li.append(el("span", "who-tag", h.side === "guest" ? `You, ${names[h.from]} → ${names[h.to]}` : `${host}, Hindi → ${names[h.to]}`));
+      li.append(el("p", "from t-small muted", h.source, h.from), el("p", "to", h.translated, h.to));
+      return li;
+    }));
+    empty.hidden = history.length > 0;
+    clear.hidden = history.length === 0;
+  };
+  clear.addEventListener("click", () => { history = []; save(); renderHistory(); result.hidden = true; });
+
+  const show = (h) => {
+    result.hidden = false;
+    const copy = el("button", "btn btn-quiet", "Copy translation");
+    copy.type = "button";
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(h.translated); copy.textContent = "Copied"; }
+      catch (e) { copy.textContent = "Select the text to copy"; }
+      setTimeout(() => (copy.textContent = "Copy translation"), 2000);
+    });
+    const tools = el("div", "tools"); tools.append(copy);
+    result.replaceChildren(el("p", "from t-body", h.source, h.from), el("p", "to", h.translated, h.to), tools);
+  };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.textContent = "";
+    if (!text.value.trim()) { errorEl.textContent = "Type a message first."; text.focus(); return; }
+    const [from, to] = pair();
+    submit.disabled = true;
+    result.hidden = false;
+    result.replaceChildren(el("div", "skeleton"), el("div", "skeleton"));
+    try {
+      const r = await fetch(`/b/${encodeURIComponent(token)}/translate`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.value, source: from, target: to }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        result.hidden = true;
+        errorEl.textContent = r.status === 429 ? "Too many messages in a minute. Wait a moment and try again."
+          : r.status === 422 ? "That message could not be translated. Keep it under 500 characters."
+          : (typeof data.detail === "string" ? data.detail : "Translation failed. Please try again.");
+        return;
+      }
+      const h = { side: side(), from, to, source: data.source_text, translated: data.translated_text };
+      history.unshift(h); save(); renderHistory(); show(h);
+      text.value = ""; text.dispatchEvent(new Event("input"));
+    } catch (err) {
+      result.hidden = true;
+      errorEl.textContent = "No connection. Check your internet and try again.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  syncSide();
+  renderHistory();
+})();
+</script>
+{% endblock %}

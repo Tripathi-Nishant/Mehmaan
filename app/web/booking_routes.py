@@ -1,10 +1,12 @@
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,9 +17,11 @@ from app.booking.policy import NotCancellableError, cancellation_split
 from app.booking.slots import format_ist
 from app.booking.states import InvalidTransitionError
 from app.config import get_settings
-from app.db.models import Booking, Host, LedgerEntry, Listing, Payment, Review, Slot
+from app.db.models import Booking, Host, LedgerEntry, Listing, Payment, Review, Slot, Traveler
 from app.db.session import get_session
 from app.host_bot.service import booking_prompt_text, cancel_note_text
+from app.interpreter.service import LANGUAGES, translate_between
+from app.llm.client import LlmOutputError
 from app.notifications.email import enqueue_booking_email
 from app.notifications.host_voice import send_host_message
 from app.payments.mock_provider import MockProvider
@@ -33,12 +37,20 @@ async def book(
     name: str = Form(),
     email: str = Form(),
     guests: int = Form(),
+    dietary: str = Form(default="", max_length=200),
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> RedirectResponse:
     settings = get_settings()
     try:
         booking = await create_hold(
-            session, slot_id, name, email, guests, settings.hold_minutes, datetime.now(UTC)
+            session,
+            slot_id,
+            name,
+            email,
+            guests,
+            settings.hold_minutes,
+            datetime.now(UTC),
+            dietary,
         )
     except SlotFullError as exc:
         raise HTTPException(
@@ -64,8 +76,18 @@ async def mock_checkout(
     payment = await session.scalar(select(Payment).where(Payment.provider_order_id == order_id))
     if payment is None:
         raise HTTPException(status_code=404, detail="order not found")
+    booking = await session.get(Booking, payment.booking_id)
+    slot = await session.get(Slot, booking.slot_id)
     return templates.TemplateResponse(
-        request=request, name="payment.html", context={"payment": payment}
+        request=request,
+        name="payment.html",
+        context={
+            "payment": payment,
+            "booking": booking,
+            "slot": slot,
+            "listing": await session.get(Listing, slot.listing_id),
+            "traveler": await session.get(Traveler, booking.traveler_id),
+        },
     )
 
 
@@ -140,14 +162,13 @@ async def verify_payment(order_id: str, session: AsyncSession = Depends(get_sess
     booking = await session.get(Booking, payment.booking_id)
     if captured_now and booking:
         slot = await session.get(Slot, booking.slot_id)
-        with suppress(Exception):
-            await notify_host(
-                session,
-                booking,
-                booking_prompt_text(slot.starts_at, booking.guests, booking.host_payout_paise),
-            )
-            # Payment is already committed. A Telegram outage must not turn a
-            # successful TEST payment into an HTTP 500 response.
+        await notify_host(
+            session,
+            booking,
+            booking_prompt_text(
+                slot.starts_at, booking.guests, booking.host_payout_paise, booking.dietary_notes
+            ),
+        )
     return RedirectResponse(f"/b/{booking.access_token}", status_code=303)
 
 
@@ -204,6 +225,9 @@ async def booking_page(
         context={
             "booking": booking,
             "listing": listing,
+            "slot": slot,
+            "host": await session.get(Host, listing.host_id) if listing else None,
+            "traveler": await session.get(Traveler, booking.traveler_id),
             "location": location_reveal(booking, listing),
             "cancellable": booking.status in CANCELLABLE and slot.starts_at > datetime.now(UTC),
         },
@@ -220,6 +244,7 @@ async def cancel_preview(
     if booking is None:
         raise HTTPException(status_code=404, detail="booking not found")
     slot = await session.get(Slot, booking.slot_id)
+    listing = await session.get(Listing, slot.listing_id)
     try:
         if booking.status not in CANCELLABLE:
             raise NotCancellableError(booking.status)
@@ -229,7 +254,14 @@ async def cancel_preview(
     return templates.TemplateResponse(
         request=request,
         name="cancel.html",
-        context={"booking": booking, "slot": slot, "refund": refund, "keep": keep},
+        context={
+            "booking": booking,
+            "slot": slot,
+            "listing": listing,
+            "host": await session.get(Host, listing.host_id) if listing else None,
+            "refund": refund,
+            "keep": keep,
+        },
     )
 
 
@@ -247,6 +279,68 @@ async def cancel_confirm(
         slot = await session.get(Slot, booking.slot_id)
         await notify_host(session, booking, cancel_note_text(slot.starts_at, keep))
     return RedirectResponse(f"/b/{access_token}", status_code=303)
+
+
+class TranslateIn(BaseModel):
+    text: str = Field(max_length=500)
+    source: Literal[tuple(LANGUAGES)]  # type: ignore[valid-type]
+    target: Literal[tuple(LANGUAGES)]  # type: ignore[valid-type]
+
+    @model_validator(mode="after")
+    def guest_language_and_hindi(self):
+        self.text = self.text.strip()
+        if not self.text:
+            raise ValueError("text is empty")
+        if sorted([self.source == "hi", self.target == "hi"]) != [False, True]:
+            raise ValueError("one side must be Hindi and the other a guest language")
+        return self
+
+
+async def confirmed_booking(session: AsyncSession, access_token: str) -> Booking:
+    booking = await session.scalar(select(Booking).where(Booking.access_token == access_token))
+    if booking is None:
+        raise HTTPException(status_code=404, detail="booking not found")
+    if booking.status != "CONFIRMED":
+        raise HTTPException(
+            status_code=403, detail="Translation help opens once your host confirms."
+        )
+    return booking
+
+
+@router.get("/b/{access_token}/translate", response_class=HTMLResponse)
+async def translate_page(
+    request: Request,
+    access_token: str,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
+):
+    booking = await confirmed_booking(session, access_token)
+    slot = await session.get(Slot, booking.slot_id)
+    listing = await session.get(Listing, slot.listing_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="translate.html",
+        context={
+            "booking": booking,
+            "host": await session.get(Host, listing.host_id),
+            "languages": {k: v for k, v in LANGUAGES.items() if k != "hi"},
+        },
+    )
+
+
+@router.post("/b/{access_token}/translate")
+async def translate_message(
+    access_token: str,
+    body: TranslateIn,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
+) -> dict[str, str]:
+    await confirmed_booking(session, access_token)
+    try:
+        translated = await translate_between(body.text, body.source, body.target, get_settings())
+    except LlmOutputError as exc:
+        raise HTTPException(
+            status_code=503, detail="Translation is busy right now. Please try again."
+        ) from exc
+    return {"source_text": body.text, "translated_text": translated}
 
 
 @router.post("/b/{access_token}/review")

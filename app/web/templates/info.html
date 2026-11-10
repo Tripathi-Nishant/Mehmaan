@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block main %}
+<main id="main">
+  <header class="info-head">
+    <div class="wrap">
+      <div class="ornate">
+        <h1 class="t-page">{% block heading %}{% endblock %}</h1>
+        <p class="t-body">{% block intro %}{% endblock %}</p>
+      </div>
+    </div>
+  </header>
+  <article class="wrap">
+    <div class="prose t-body">{% block body %}{% endblock %}</div>
+  </article>
+</main>
+{% endblock %}
