@@ -23,6 +23,7 @@ async def create_hold(
     guests: int,
     hold_minutes: int,
     now: datetime,
+    dietary_notes: str | None = None,
 ) -> Booking:
     """Reserve seats for an unpaid booking. Flushes but does not commit: the caller adds the
     payment order in the same transaction so a hold never exists without one."""
@@ -45,8 +46,10 @@ async def create_hold(
         status="HELD",
         amount_paise=listing.price_per_person_paise * guests,  # server-side, never from the form
         hold_expires_at=now + timedelta(minutes=hold_minutes),
+        dietary_notes=(dietary_notes or "").strip() or None,
     )
     session.add(traveler)
+    await session.flush()  # no ORM relationships, so insert order isn't guaranteed: parent first
     session.add(booking)
     slot.booked_count += guests
     await session.flush()

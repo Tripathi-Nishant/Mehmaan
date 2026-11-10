@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Mehmaan{% endblock %}
+{% block head %}
+<meta name="robots" content="noindex">
+<style>
+  .err { padding: var(--s-700) 0 var(--s-900); }
+  .err-inner { display: grid; grid-template-columns: 220px 1fr; gap: var(--s-600); align-items: center; max-width: 820px; margin: 0 auto; }
+  .err-arch { aspect-ratio: 100 / 130; -webkit-mask: var(--arch) center / 100% 100% no-repeat; mask: var(--arch) center / 100% 100% no-repeat; background: var(--maroon); display: grid; place-items: end center; padding-bottom: 10%; }
+  .err-arch .doors { width: 76%; height: 74%; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; -webkit-mask: var(--arch) center / 100% 100% no-repeat; mask: var(--arch) center / 100% 100% no-repeat; }
+  .err-arch .doors span { background: #3B2414 var(--pattern); background-size: 26px 26px; }
+  .err .code { display: inline-block; padding: var(--s-25) var(--s-100); border-radius: var(--r-full); background: var(--paper); border: 1px solid var(--line); color: var(--text-muted); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; }
+  .err h1 { margin-top: var(--s-200); color: var(--maroon); }
+  .err p.msg { margin-top: var(--s-200); max-width: 46ch; color: var(--text-muted); font-size: 19px; }
+  .err .next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-300); margin-top: var(--s-400); }
+  .err .next a.home { color: var(--secondary); font-weight: 600; }
+  @media (max-width: 680px) { .err { padding: var(--s-500) 0 var(--s-700); } .err-inner { grid-template-columns: 1fr; gap: var(--s-400); } .err-arch { width: 140px; } .err p.msg { font-size: 17px; } .err .next .btn { width: 100%; } }
+</style>
+{% endblock %}
+
+{% block main %}
+<main id="main" class="err">
+  <div class="wrap err-inner">
+    <div class="err-arch" aria-hidden="true"><div class="doors"><span></span><span></span></div></div>
+    <div>
+      <span class="code">Error {{ status }}</span>
+      <h1 class="t-page">{{ title }}</h1>
+      <p class="msg">{{ message }}</p>
+      <div class="next">
+        {% if href %}<a class="btn btn-primary" href="{{ href }}">{{ action }}</a>
+        {% else %}<button class="btn btn-primary" type="button" onclick="history.length > 1 ? history.back() : (location.href = '/')">{{ action }}</button>{% endif %}
+        {% if href != "/" %}<a class="home" href="/">Homepage</a>{% endif %}
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

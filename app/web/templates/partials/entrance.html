@@ -1,0 +1,28 @@
+{# Welcome door (ported from design-ref DoorEntrance, CSS + entrance.js, no libraries).
+   Shown once per browser session; only when html.door-pending is set, so no-JS visitors never see it. #}
+<div class="door" id="door" role="dialog" aria-modal="true" aria-label="Welcome door. Open the door to enter Mehmaan.">
+  <div class="door-box">
+    <div class="door-stage">
+      <img class="door-frame" src="/static/img/haveli-door.webp" width="1920" height="1088" draggable="false"
+           alt="Carved golden double door with brass rosettes inside a pink sandstone arch with a marigold toran">
+      <div class="door-way">
+        <div class="door-glow"></div>
+        <button class="door-leaves" type="button" tabindex="-1" aria-label="Open the door" data-door-open>
+          <span class="door-leaf left"><span class="door-shade"></span></span>
+          <span class="door-leaf right"><span class="door-shade"></span></span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="door-ui">
+    <div class="door-top">
+      <p class="eyebrow"><span lang="hi">अतिथि देवो भव</span> · The guest is God</p>
+      <p class="door-name">Mehmaan</p>
+    </div>
+    <div class="door-bottom">
+      <button class="btn btn-gold door-cta" type="button" data-door-open><span lang="hi">पधारिए</span><span aria-hidden="true">·</span>Open the door</button>
+      <p>Or tap the door.</p>
+    </div>
+  </div>
+  <button class="door-skip" type="button" data-door-skip>Skip</button>
+</div>

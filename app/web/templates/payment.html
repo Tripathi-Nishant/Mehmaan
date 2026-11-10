@@ -1,1 +1,113 @@
-{% extends "base.html" %}{% block title %}Test payment · Mehmaan{% endblock %}{% block content %}<article class="card"><h1>TEST PAYMENT</h1><p>No real money will move.</p><p class="price">₹{{ '{:,}'.format(payment.amount_paise // 100) }}</p><form method="post" action="/pay/mock/{{ payment.provider_order_id }}/verify"><button>Pay test amount</button></form><form method="post" action="/pay/mock/{{ payment.provider_order_id }}/fail"><button style="background:#75685e">Fail test payment</button></form><p class="muted">This is a mock checkout for the challenge demo. "Fail" simulates a declined payment and releases your seats.</p></article>{% endblock %}
+{% extends "base.html" %}
+{% block title %}TEST payment · Mehmaan{% endblock %}
+{% block head %}
+<meta name="robots" content="noindex">
+<style>
+  .pay { padding: var(--s-500) 0 var(--s-800); }
+  .pay-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--s-500); align-items: start; max-width: 1040px; margin: 0 auto; }
+  .pay h1 { color: var(--maroon); }
+  .pay .lede { margin-top: var(--s-100); color: var(--text-muted); }
+  .banner { display: flex; gap: var(--s-100); align-items: center; margin: var(--s-300) 0 var(--s-400); padding: var(--s-200) var(--s-300); border: 1px solid #E2C48E; border-radius: var(--radius); background: var(--wait-bg); color: var(--wait-fg); font-weight: 600; }
+  .banner i { font-size: 24px; }
+  .summary { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2xl); overflow: hidden; }
+  .summary-top { display: grid; grid-template-columns: 72px 1fr; gap: var(--s-200); align-items: center; padding: var(--s-300); background: var(--paper) var(--grain); border-bottom: 1px solid var(--line); }
+  .mini-arch { aspect-ratio: 100 / 130; -webkit-mask: var(--arch) center / 100% 100% no-repeat; mask: var(--arch) center / 100% 100% no-repeat; background: var(--maroon) var(--pattern); background-size: 28px 28px; }
+  .summary dl { margin: 0; padding: var(--s-100) var(--s-300); }
+  .summary dl div { display: flex; justify-content: space-between; gap: var(--s-200); padding: var(--s-100) 0; border-bottom: 1px solid var(--line); }
+  .summary dl div:last-child { border-bottom: 0; }
+  .summary dt { color: var(--text-muted); }
+  .summary dd { margin: 0; text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+  .money { padding: var(--s-200) var(--s-300) var(--s-300); border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .money p { display: flex; justify-content: space-between; padding: var(--s-50) 0; }
+  .money .total { margin-top: var(--s-75); padding-top: var(--s-100); border-top: 1px solid var(--line); font-size: 21px; font-weight: 700; }
+  .checkout { padding: var(--s-400) var(--s-300); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2xl); box-shadow: var(--shadow); }
+  .checkout h2 { font: 600 19px/1.4 var(--font-body); }
+  .checkout .amount { margin: var(--s-75) 0 var(--s-300); font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .checkout form { margin: 0; }
+  .checkout .btn { width: 100%; }
+  .fail-link { display: block; width: 100%; min-height: 44px; margin-top: var(--s-100); border: 0; background: none; color: var(--secondary); font: 500 15px/1.4 var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .hold { display: flex; gap: var(--s-75); align-items: center; margin-top: var(--s-300); color: var(--text-muted); font-size: 15px; }
+  .rules { margin-top: var(--s-300); padding-top: var(--s-300); border-top: 1px solid var(--line); }
+  .rules h3 { font: 600 15px/1.4 var(--font-body); margin-bottom: var(--s-75); }
+  .rules ul { margin: 0; padding-left: var(--s-300); color: var(--text-muted); font-size: 15px; display: grid; gap: var(--s-50); }
+  .state { display: grid; gap: var(--s-200); justify-items: start; }
+  .state .tag { display: inline-flex; align-items: center; gap: var(--s-75); padding: var(--s-50) var(--s-200); border-radius: var(--r-full); font-weight: 600; }
+  .state .ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .state .err { background: var(--err-bg); color: var(--err-fg); }
+  @media (max-width: 900px) { .pay-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .summary dl div { flex-direction: column; gap: 0; } .summary dd { text-align: left; } .checkout { padding: var(--s-300) var(--s-200); } }
+</style>
+{% endblock %}
+
+{% block main %}
+{% set status = payment.status or "CREATED" %}
+{% set inr = "₹{:,}" %}
+{% set each = listing.price_per_person_paise // 100 if listing else none %}
+<main id="main" class="pay">
+  <div class="wrap">
+    <div style="max-width:1040px;margin:0 auto">
+      <h1 class="t-page">Review and pay</h1>
+      <p class="lede t-body">Check your booking, then complete the TEST payment.</p>
+      <p class="banner" role="note"><i class="ph ph-receipt" aria-hidden="true"></i>TEST PAYMENT — No real money will be charged.</p>
+    </div>
+    <div class="pay-grid">
+      <section class="summary" aria-labelledby="sum-title">
+        {% if listing %}
+        <div class="summary-top">
+          <span class="mini-arch" aria-hidden="true"></span>
+          <div>
+            <h2 id="sum-title" class="t-card">{{ listing.title_en or listing.description_hi }}</h2>
+            <p class="t-small muted">At home in {{ listing.area }}, {{ listing.city }}</p>
+          </div>
+        </div>
+        {% else %}<h2 id="sum-title" class="sr-only">Booking summary</h2>{% endif %}
+        {% if booking %}
+        <dl class="t-body">
+          {% if slot %}<div><dt>Date and time</dt><dd>{{ slot.starts_at | ist }} (India time)</dd></div>{% endif %}
+          <div><dt>Guests</dt><dd>{{ booking.guests }}</dd></div>
+          {% if traveler %}<div><dt>Name</dt><dd>{{ traveler.name }}</dd></div>
+          <div><dt>Email</dt><dd>{{ traveler.email }}</dd></div>{% endif %}
+          <div><dt>Dietary needs</dt><dd>{{ booking.dietary_notes or "None given" }}</dd></div>
+        </dl>
+        <div class="money t-body">
+          {% if each %}<p><span>{{ inr.format(each) }} × {{ booking.guests }} guest{{ "" if booking.guests == 1 else "s" }}</span><span>{{ inr.format(booking.amount_paise // 100) }}</span></p>{% endif %}
+          <p><span>Fees</span><span>₹0</span></p>
+          <p class="total"><span>Total</span><span>{{ inr.format(payment.amount_paise // 100) }}</span></p>
+        </div>
+        {% endif %}
+      </section>
+
+      <aside class="checkout" aria-labelledby="pay-title">
+        {% if status == "CAPTURED" %}
+        <div class="state">
+          <span class="tag ok"><i class="ph ph-check-circle" aria-hidden="true"></i>Paid (TEST)</span>
+          <h2 id="pay-title">This booking is already paid.</h2>
+          {% if booking %}<a class="btn btn-primary" href="/b/{{ booking.access_token }}">View your booking</a>{% endif %}
+        </div>
+        {% elif status == "FAILED" %}
+        <div class="state">
+          <span class="tag err"><i class="ph ph-x-circle" aria-hidden="true"></i>Payment failed (TEST)</span>
+          <h2 id="pay-title">No money was taken and your seats were released.</h2>
+          {% if listing %}<a class="btn btn-primary" href="/listings/{{ listing.id }}">Choose a date again</a>{% endif %}
+        </div>
+        {% else %}
+        <h2 id="pay-title">Amount to pay</h2>
+        <p class="amount">{{ inr.format(payment.amount_paise // 100) }}</p>
+        <form method="post" action="/pay/mock/{{ payment.provider_order_id }}/verify"><button class="btn btn-primary" type="submit"><i class="ph ph-lock-simple" aria-hidden="true"></i>Pay {{ inr.format(payment.amount_paise // 100) }} (TEST)</button></form>
+        <form method="post" action="/pay/mock/{{ payment.provider_order_id }}/fail"><button class="fail-link" type="submit">Simulate a failed payment</button></form>
+        {% if booking and booking.hold_expires_at %}<p class="hold"><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Your seats are held until {{ booking.hold_expires_at | ist }}.</p>{% endif %}
+        {% endif %}
+        <div class="rules">
+          <h3>If plans change</h3>
+          <ul>
+            <li>Cancel 48 hours or more before: full refund.</li>
+            <li>Cancel later: 80% back, your host keeps 20%.</li>
+            <li>If your host cannot host you: full refund.</li>
+          </ul>
+          <p class="t-small" style="margin-top:var(--s-100)"><a href="/cancellation-policy">Full cancellation policy</a></p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+{% endblock %}

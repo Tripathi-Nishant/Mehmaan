@@ -112,6 +112,7 @@ class Booking(Base):
     host_payout_paise: Mapped[int] = mapped_column(Integer, default=0)
     hold_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     host_reply_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dietary_notes: Mapped[str | None] = mapped_column(String(200))  # guest's words, to the host
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

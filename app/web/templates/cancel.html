@@ -1,1 +1,71 @@
-{% extends "base.html" %}{% block title %}Cancel booking · Mehmaan{% endblock %}{% block content %}<article class="card"><h1>Cancel this booking?</h1><p>{{ slot.starts_at | ist }} · {{ booking.guests }} guest{{ 's' if booking.guests != 1 }}</p><p class="price">Refund: ₹{{ '{:,}'.format(refund // 100) }}{% if refund % 100 %}.{{ '%02d' % (refund % 100) }}{% endif %} (TEST)</p>{% if keep %}<p class="muted">Cancelling less than 48 hours before the start: the host keeps ₹{{ '{:,}'.format(keep // 100) }}{% if keep % 100 %}.{{ '%02d' % (keep % 100) }}{% endif %} (20%).</p>{% else %}<p class="muted">More than 48 hours before the start: full refund.</p>{% endif %}<form method="post" action="/b/{{ booking.access_token }}/cancel"><button style="background:#75685e">Yes, cancel booking</button></form><p><a href="/b/{{ booking.access_token }}">Keep my booking</a></p></article>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Cancel booking · Mehmaan{% endblock %}
+{% macro inr(paise) %}₹{{ '{:,}'.format(paise // 100) }}{% if paise % 100 %}.{{ '%02d' % (paise % 100) }}{% endif %}{% endmacro %}
+{% block head %}
+<meta name="robots" content="noindex">
+<style>
+  .cx { padding: var(--s-500) 0 var(--s-800); }
+  .cx-inner { max-width: 720px; margin: 0 auto; }
+  .cx .back { display: inline-flex; align-items: center; gap: var(--s-75); min-height: 44px; color: var(--secondary); font-weight: 500; }
+  .cx h1 { margin-top: var(--s-200); color: var(--maroon); }
+  .cx .what { margin-top: var(--s-100); color: var(--text-muted); }
+  .result { margin-top: var(--s-400); padding: var(--s-400); border-radius: var(--r-2xl); background: var(--paper) var(--grain); border: 1px solid var(--line); }
+  .result .headline { font: 400 30px/1.25 var(--font-display); color: var(--text); }
+  .result .why { margin-top: var(--s-100); color: var(--text-muted); }
+  .split { margin: var(--s-300) 0 0; font-variant-numeric: tabular-nums; }
+  .split div { display: flex; justify-content: space-between; gap: var(--s-200); padding: var(--s-100) 0; border-bottom: 1px solid var(--line); }
+  .split div:last-child { border-bottom: 0; }
+  .split dt { color: var(--text-muted); }
+  .split dd { margin: 0; font-weight: 600; }
+  .split .refund dd { color: var(--ok-fg); font-size: 21px; }
+  .policy { margin-top: var(--s-300); padding: var(--s-200) var(--s-300); border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+  .policy h2 { font: 600 15px/1.4 var(--font-body); margin-bottom: var(--s-75); }
+  .policy ul { margin: 0; padding-left: var(--s-300); display: grid; gap: var(--s-50); color: var(--text-muted); font-size: 15px; }
+  .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-300); margin-top: var(--s-400); }
+  .confirm form { margin: 0; }
+  .confirm .keep { display: inline-flex; align-items: center; min-height: 48px; color: var(--secondary); font-weight: 600; }
+  .note { margin-top: var(--s-200); color: var(--text-muted); font-size: 15px; }
+  @media (max-width: 640px) { .result { padding: var(--s-300) var(--s-200); } .result .headline { font-size: 24px; } .confirm form, .confirm .btn { width: 100%; } .confirm .keep { justify-content: center; width: 100%; } }
+</style>
+{% endblock %}
+
+{% block main %}
+{% set host_name = (host.display_name ~ " ji") if host and host.display_name else "Your host" %}
+<main id="main" class="cx">
+  <div class="wrap cx-inner">
+    <a class="back" href="/b/{{ booking.access_token }}"><i class="ph ph-arrow-left" aria-hidden="true"></i>Back to your booking</a>
+    <h1 class="t-page">Cancel this booking?</h1>
+    <p class="what t-body">{% if listing %}{{ listing.title_en or listing.description_hi }} · {% endif %}{{ slot.starts_at | ist }} · {{ booking.guests }} guest{{ "" if booking.guests == 1 else "s" }}</p>
+
+    <section class="result" aria-labelledby="refund-title">
+      {% if keep %}
+      <p id="refund-title" class="headline">You will receive {{ inr(refund) }} back. {{ host_name }} keeps {{ inr(keep) }}.</p>
+      <p class="why t-body">You are cancelling less than 48 hours before the start, so 20% goes to {{ host_name }}, who has already set this time aside for you.</p>
+      {% else %}
+      <p id="refund-title" class="headline">You will receive the full {{ inr(refund) }} back.</p>
+      <p class="why t-body">You are cancelling 48 hours or more before the start, so nothing is kept.</p>
+      {% endif %}
+      <dl class="split t-body">
+        <div><dt>You paid</dt><dd>{{ inr(booking.amount_paise) }}</dd></div>
+        {% if keep %}<div><dt>{{ host_name }} receives</dt><dd>{{ inr(keep) }}</dd></div>{% endif %}
+        <div class="refund"><dt>Your refund (TEST)</dt><dd>{{ inr(refund) }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="policy" aria-labelledby="pol-title">
+      <h2 id="pol-title">Our cancellation policy, the same for every home</h2>
+      <ul>
+        <li>48 hours or more before the start: full refund.</li>
+        <li>Less than 48 hours before: 80% back, the host keeps 20%.</li>
+        <li>After the start: cannot be cancelled.</li>
+      </ul>
+    </section>
+
+    <div class="confirm">
+      <form method="post" action="/b/{{ booking.access_token }}/cancel"><button class="btn btn-primary" type="submit">Yes, cancel my booking</button></form>
+      <a class="keep" href="/b/{{ booking.access_token }}">Keep my booking</a>
+    </div>
+    <p class="note">{{ host_name }} will be told right away. Refunds on this demo are TEST refunds; no real money moves.</p>
+  </div>
+</main>
+{% endblock %}

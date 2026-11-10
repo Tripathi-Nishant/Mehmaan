@@ -13,6 +13,13 @@ def test_booking_prompt_names_date_guests_and_payout():
     )
 
 
+def test_booking_prompt_includes_dietary_note_before_the_question():
+    starts = datetime(2026, 11, 14, 5, 30, tzinfo=UTC)
+    text = booking_prompt_text(starts, 2, 255000, "Peanut allergy")
+    assert text.endswith('Mehmaan ne khaane ke baare mein bataya: "Peanut allergy". Haan ya nahi?')
+    assert booking_prompt_text(starts, 2, 255000, None).endswith("(test). Haan ya nahi?")
+
+
 def test_single_guest_prompt():
     assert "1 mehmaan" in booking_prompt_text(datetime(2026, 11, 14, 5, 30, tzinfo=UTC), 1, 1)
 
@@ -127,6 +134,17 @@ async def test_nahi_declines_refunds_and_releases_seats(db):
     )
     assert balance == 0  # capture + reversal net out
     assert (await db.get(Slot, slot.id, populate_existing=True)).booked_count == 0
+
+
+async def test_hold_stores_trimmed_dietary_note_and_blank_as_null(db):
+    from app.booking.db_service import create_hold
+
+    _, slot, _ = await seed_paid_booking(db)  # 2 of 4 seats left
+    now = datetime.now(UTC)
+    noted = await create_hold(db, slot.id, "Sophie", "s@x.test", 1, 15, now, " Peanut allergy ")
+    blank = await create_hold(db, slot.id, "Tom", "t@x.test", 1, 15, now, "   ")
+    assert noted.dietary_notes == "Peanut allergy"
+    assert blank.dietary_notes is None
 
 
 async def test_nothing_pending_goes_to_onboarding(db):

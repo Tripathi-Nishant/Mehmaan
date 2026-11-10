@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="72" viewBox="0 0 120 72">
+  <!-- gold temple line art, repeated along the Atithi Devo Bhava band -->
+  <g fill="none" stroke="#C9A227" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 71.5H120"/>
+    <path d="M38 71.5V52H82V71.5M42 52V47H78V52"/>
+    <path d="M46 47C46 31 53 18 60 11C67 18 74 31 74 47"/>
+    <path d="M50 47C50 34 55 24 60 18C65 24 70 34 70 47"/>
+    <ellipse cx="60" cy="10" rx="4.5" ry="1.8"/>
+    <path d="M60 8V3L67 5L60 7"/>
+    <path d="M55 71.5V62Q60 55 65 62V71.5"/>
+    <path d="M4 71.5V60H24V71.5M7 60Q14 47 21 60M14 51V47"/>
+    <path d="M96 71.5V60H116V71.5M99 60Q106 47 113 60M106 51V47"/>
+    <circle cx="14" cy="46" r="1.2"/><circle cx="106" cy="46" r="1.2"/>
+  </g>
+</svg>

@@ -2,7 +2,10 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
 from app.db.session import engine
@@ -11,6 +14,7 @@ from app.host_bot.webhook import router as telegram_router
 from app.interpreter.routes import router as interpreter_router
 from app.jobs.scheduler import scheduler_loop
 from app.web.booking_routes import router as booking_router
+from app.web.errors import http_error, server_error, validation_error
 from app.web.guards import PublicRateLimitMiddleware
 from app.web.media_routes import router as media_router
 from app.web.routes import router as web_router
@@ -46,6 +50,10 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Mehmaan", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(PublicRateLimitMiddleware)
+app.add_exception_handler(StarletteHTTPException, http_error)
+app.add_exception_handler(RequestValidationError, validation_error)
+app.add_exception_handler(Exception, server_error)
+app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 app.include_router(telegram_router)
 app.include_router(web_router)
 app.include_router(booking_router)

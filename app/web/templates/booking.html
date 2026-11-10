@@ -1,1 +1,195 @@
-{% extends "base.html" %}{% block title %}Your booking · Mehmaan{% endblock %}{% block content %}<article class="card"><h1>Booking {{ booking.status }}</h1><p>{{ (listing.title_en or listing.description_hi) if listing else 'Experience' }}</p><p>TEST PAYMENT — no real money.</p>{% if location %}<h3>How to get there</h3><p><a href="{{ location.map_url }}" target="_blank" rel="noopener">Open the host's location in Google Maps</a></p>{% if location.landmark %}<p>Landmark: {{ location.landmark }}</p>{% endif %}{% elif booking.status == 'PAID_PENDING_HOST' %}<p class="muted">The map location and landmark will appear here after the host confirms.</p>{% endif %}{% if cancellable %}<p><a href="/b/{{ booking.access_token }}/cancel">Cancel booking</a></p>{% endif %}{% if booking.status == 'COMPLETED' %}<h3>Leave a review</h3><form method="post" action="/b/{{ booking.access_token }}/review"><label>Warmth <input name="warmth" type="number" min="1" max="5" value="5" required></label><label>Review <input name="text" required></label><button>Submit review</button></form>{% endif %}</article>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Your booking · Mehmaan{% endblock %}
+{% block head %}
+<meta name="robots" content="noindex">
+<style>
+  .bk { padding: var(--s-500) 0 var(--s-800); }
+  .bk-inner { max-width: 880px; margin: 0 auto; }
+  .status { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: var(--s-300); align-items: start; padding: var(--s-500) var(--s-400); border-radius: var(--r-2xl); border: 1px solid; overflow: hidden; }
+  .status .icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: var(--r-full); font-size: 32px; }
+  .status h1 { font: 400 36px/1.2 var(--font-display); }
+  .status p { margin-top: var(--s-75); font-size: 19px; }
+  .status .label { display: inline-block; margin-bottom: var(--s-75); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .s-wait { background: var(--wait-bg); border-color: #E2C48E; color: var(--wait-fg); }
+  .s-wait .icon { background: rgba(122, 75, 18, 0.12); }
+  .s-ok { background: var(--ok-bg); border-color: #B9DCC5; color: var(--ok-fg); }
+  .s-ok .icon { background: rgba(30, 91, 58, 0.12); }
+  .s-err { background: var(--err-bg); border-color: #EBC2CA; color: var(--err-fg); }
+  .s-err .icon { background: rgba(142, 27, 46, 0.1); }
+  .s-quiet { background: var(--paper); border-color: var(--line); color: var(--text); }
+  .s-quiet .icon { background: var(--line); color: var(--text-muted); }
+  .s-warm { background: var(--maroon) var(--pattern); border-color: var(--maroon); color: var(--night-text); }
+  .s-warm .icon { background: rgba(232, 163, 23, 0.18); color: var(--accent); }
+  @keyframes pulse { 50% { transform: scale(1.08); opacity: 0.75; } }
+  .s-wait .icon i { animation: pulse 2.4s var(--ease) infinite; }
+  .live { display: inline-flex; align-items: center; gap: var(--s-75); margin-top: var(--s-200); font-size: 15px; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: var(--r-full); background: currentColor; animation: pulse 2.4s var(--ease) infinite; }
+
+  .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: var(--s-300); margin-top: var(--s-400); }
+  .panel { padding: var(--s-300); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-2xl); }
+  .panel h2 { margin-bottom: var(--s-200); font: 400 24px/1.3 var(--font-display); color: var(--maroon); }
+  .panel dl { margin: 0; }
+  .panel dl div { display: flex; justify-content: space-between; gap: var(--s-200); padding: var(--s-100) 0; border-bottom: 1px solid var(--line); }
+  .panel dl div:last-child { border-bottom: 0; }
+  .panel dt { color: var(--text-muted); }
+  .panel dd { margin: 0; text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+  .where { display: grid; gap: var(--s-200); }
+  .where .btn { width: 100%; }
+  .where .landmark { padding: var(--s-200); border-radius: var(--radius); background: var(--paper); }
+  .locked { display: flex; gap: var(--s-100); color: var(--text-muted); }
+  .locked i { font-size: 22px; color: var(--secondary); }
+  .actions { display: grid; gap: var(--s-100); margin-top: var(--s-200); }
+  .actions a { display: inline-flex; align-items: center; gap: var(--s-75); min-height: 44px; color: var(--secondary); font-weight: 500; }
+  .review { margin-top: var(--s-400); }
+  .review form { display: grid; gap: var(--s-200); }
+  .review label { display: grid; gap: var(--s-75); font-weight: 600; }
+  .review input, .review textarea { min-height: 48px; padding: var(--s-100) var(--s-200); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); font: inherit; }
+  .review .btn { justify-self: start; }
+
+  /* Marigold petals (DESIGN.md §7): once, only when the status changes to CONFIRMED */
+  .petal { position: fixed; top: -24px; z-index: 70; width: 12px; height: 16px; border-radius: 60% 0 60% 0; pointer-events: none; animation: fall var(--d) cubic-bezier(0.33, 0, 0.67, 1) forwards; }
+  @keyframes fall { to { transform: translate(var(--x), 105vh) rotate(var(--r)); opacity: 0.9; } }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    .status { grid-template-columns: 1fr; padding: var(--s-300); gap: var(--s-200); }
+    .status h1 { font-size: 28px; }
+    .status p { font-size: 17px; }
+    .panel dl div { flex-direction: column; gap: 0; }
+    .panel dd { text-align: left; }
+  }
+</style>
+{% endblock %}
+
+{% block main %}
+{% set s = booking.status %}
+{% set host_name = (host.display_name ~ " ji") if host and host.display_name else "Your host" %}
+{% set first = traveler.name.split()[0] if traveler and traveler.name else "" %}
+{% set inr = "₹{:,}" %}
+<main id="main" class="bk" data-status="{{ s }}" data-token="{{ booking.access_token }}">
+  <div class="wrap bk-inner">
+    {% if s == "CONFIRMED" %}
+    <section class="status s-ok" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-check-circle"></i></span>
+      <div><span class="label">Confirmed</span><h1>Your place is ready.</h1><p>We look forward to welcoming you{% if first %}, {{ first }}{% endif %}. {{ host_name }} is expecting you.</p></div>
+    </section>
+    {% elif s == "PAID_PENDING_HOST" %}
+    <section class="status s-wait" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-hourglass-medium"></i></span>
+      <div><span class="label">Waiting for your host</span><h1>{{ host_name }} has your request.</h1><p>They will reply soon. If they cannot host you, you get a full refund automatically.</p><p class="live">This page updates by itself.</p></div>
+    </section>
+    {% elif s == "HELD" %}
+    <section class="status s-wait" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-credit-card"></i></span>
+      <div><span class="label">Payment not finished</span><h1>Your seats are held.</h1><p>{% if booking.hold_expires_at %}Finish the TEST payment before {{ booking.hold_expires_at | ist }}, or the seats are released.{% else %}Finish the TEST payment to send your request.{% endif %}</p><p class="live">This page updates by itself.</p></div>
+    </section>
+    {% elif s == "CANCELLED" %}
+    <section class="status s-quiet" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-x-circle"></i></span>
+      <div><span class="label">Cancelled</span><h1>Cancelled. {{ inr.format((booking.amount_paise - booking.host_payout_paise) // 100) }} refunded (TEST).</h1><p>{% if booking.host_payout_paise %}{{ host_name }} keeps {{ inr.format(booking.host_payout_paise // 100) }}, as the cancellation was less than 48 hours before.{% else %}You got the full amount back.{% endif %}</p></div>
+    </section>
+    {% elif s in ("DECLINED", "REFUNDED") %}
+    <section class="status s-err" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-arrow-counter-clockwise"></i></span>
+      <div><span class="label">Not confirmed</span><h1>{{ host_name }} could not host you.</h1><p>{{ inr.format(booking.amount_paise // 100) }} refunded in full (TEST). We are sorry. Other homes may have the same date free.</p></div>
+    </section>
+    {% elif s == "EXPIRED" %}
+    <section class="status s-quiet" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-clock-countdown"></i></span>
+      <div><span class="label">Expired</span><h1>Your reservation time ended.</h1><p>The payment was not finished in time, so the seats were released. Nothing was charged.</p></div>
+    </section>
+    {% elif s == "COMPLETED" %}
+    <section class="status s-warm" role="status">
+      <span class="icon" aria-hidden="true"><i class="ph ph-flower-lotus"></i></span>
+      <div><span class="label">Thank you for visiting</span><h1 lang="hi">फिर ज़रूर आना</h1><p>Phir zaroor aana: please come again{% if first %}, {{ first }}{% endif %}.</p></div>
+    </section>
+    {% endif %}
+
+    <div class="grid">
+      <section class="panel" aria-labelledby="det-title">
+        <h2 id="det-title">Your booking</h2>
+        <dl class="t-body">
+          <div><dt>Experience</dt><dd>{% if listing %}<a href="/listings/{{ listing.id }}">{{ listing.title_en or listing.description_hi }}</a>{% else %}Experience{% endif %}</dd></div>
+          {% if host %}<div><dt>Host</dt><dd>{{ host_name }}{% if listing and listing.is_demo_roleplay %} <span class="badge badge-wait">Demo host (role-play)</span>{% endif %}</dd></div>{% endif %}
+          {% if slot %}<div><dt>Date and time</dt><dd>{{ slot.starts_at | ist }} (India time)</dd></div>{% endif %}
+          <div><dt>Guests</dt><dd>{{ booking.guests }}</dd></div>
+          {% if booking.dietary_notes %}<div><dt>Dietary needs</dt><dd>{{ booking.dietary_notes }}</dd></div>{% endif %}
+          <div><dt>Paid</dt><dd>{{ inr.format(booking.amount_paise // 100) }} (TEST)</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel" aria-labelledby="where-title">
+        <h2 id="where-title">How to get there</h2>
+        {% if location %}
+        <div class="where">
+          <span class="badge badge-ok" style="justify-self:start"><i class="ph ph-map-pin" aria-hidden="true"></i>Location shared</span>
+          <a class="btn btn-primary" href="{{ location.map_url }}" target="_blank" rel="noopener"><i class="ph ph-map-trifold" aria-hidden="true"></i>Open in Google Maps</a>
+          {% if location.landmark %}<p class="landmark t-body"><strong>Landmark:</strong> {{ location.landmark }}</p>{% endif %}
+        </div>
+        {% elif s in ("PAID_PENDING_HOST", "HELD") %}
+        <p class="locked t-body"><i class="ph ph-lock-simple" aria-hidden="true"></i><span>The map pin and landmark appear here after the host confirms.</span></p>
+        {% elif listing %}
+        <p class="t-body muted">{{ listing.area }}, {{ listing.city }}</p>
+        {% endif %}
+        {% if cancellable or listing %}
+        <div class="actions">
+          {% if s == "CONFIRMED" %}<a href="/b/{{ booking.access_token }}/translate"><i class="ph ph-translate" aria-hidden="true"></i>Language help: talk with {{ host_name }}</a>{% endif %}
+          {% if cancellable %}<a href="/b/{{ booking.access_token }}/cancel"><i class="ph ph-x" aria-hidden="true"></i>Cancel booking</a>{% endif %}
+          {% if s in ("EXPIRED", "DECLINED", "REFUNDED", "CANCELLED") and listing %}<a href="/listings/{{ listing.id }}"><i class="ph ph-calendar-plus" aria-hidden="true"></i>Choose another date</a>{% endif %}
+        </div>
+        {% endif %}
+      </section>
+    </div>
+
+    {% if s == "COMPLETED" %}
+    <section class="panel review" aria-labelledby="rev-title">
+      <h2 id="rev-title">What will you remember?</h2>
+      <form method="post" action="/b/{{ booking.access_token }}/review">
+        <label>How warm was the welcome? (1 to 5)<input name="warmth" type="number" min="1" max="5" value="5" required></label>
+        <label>Your words for the host<textarea name="text" required maxlength="1000"></textarea></label>
+        <button class="btn btn-primary" type="submit">Share your review</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const main = document.querySelector("main[data-status]");
+  const status = main.dataset.status, key = "mehmaan-status-" + main.dataset.token;
+  let seen = null;
+  try { seen = localStorage.getItem(key); localStorage.setItem(key, status); } catch (e) {}
+
+  // Petals: only on the change to CONFIRMED, never on reload, never with reduced motion.
+  if (status === "CONFIRMED" && seen && seen !== "CONFIRMED"
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement("span");
+      p.className = "petal";
+      p.style.left = Math.random() * 100 + "vw";
+      p.style.background = i % 2 ? "#F28C1B" : "#F7C23A";
+      p.style.animationDelay = Math.random() * 0.8 + "s";
+      p.style.setProperty("--d", 2.2 + Math.random() * 1.2 + "s");
+      p.style.setProperty("--x", (Math.random() * 160 - 80).toFixed(0) + "px");
+      p.style.setProperty("--r", (Math.random() * 540 - 270).toFixed(0) + "deg");
+      p.addEventListener("animationend", () => p.remove());
+      document.body.appendChild(p);
+    }
+  }
+
+  // Live status while waiting: re-read this page and reload when the status changes.
+  if (status !== "PAID_PENDING_HOST" && status !== "HELD") return;
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const html = await (await fetch(location.href, { cache: "no-store" })).text();
+      const now = html.match(/data-status="([A-Z_]+)"/)?.[1];
+      if (now && now !== status) location.reload();
+    } catch (e) {}
+  }, 5000);
+})();
+</script>
+{% endblock %}

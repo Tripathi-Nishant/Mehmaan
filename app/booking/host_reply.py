@@ -45,7 +45,9 @@ async def booking_reply(db: AsyncSession, booking: Booking, said: str, settings:
     action = route_host_reply(True, await classify_reply(said, settings))
     if action == "ask_again":
         slot = await db.get(Slot, booking.slot_id)
-        prompt = booking_prompt_text(slot.starts_at, booking.guests, booking.host_payout_paise)
+        prompt = booking_prompt_text(
+            slot.starts_at, booking.guests, booking.host_payout_paise, booking.dietary_notes
+        )
         return "Kripya haan ya nahi boliye. " + prompt
     return await answer_booking(db, booking, action)
 

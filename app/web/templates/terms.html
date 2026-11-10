@@ -1,0 +1,23 @@
+{% extends "info.html" %}
+{% block title %}Terms · Mehmaan{% endblock %}
+{% block description %}The terms for booking an experience in a Mehmaan home during the demo.{% endblock %}
+{% block heading %}Terms{% endblock %}
+{% block intro %}The simple rules that apply when you book a visit through Mehmaan.{% endblock %}
+{% block body %}
+<h2>This is a demo</h2>
+<p>Mehmaan is a demo built for a challenge. Bookings are TEST bookings, payments are simulated, and no real money moves. Hosts shown during the demo are played by our team and are labelled "Demo host (role-play)".</p>
+
+<h2>Booking</h2>
+<ul>
+  <li>Prices are per person and fixed. The total is shown before you pay.</li>
+  <li>Your seats are held for {{ hold_minutes }} minutes while you pay. After that they are released for other guests.</li>
+  <li>A booking is confirmed only when your host says yes. If they do not reply within {{ reply_hours }} hours, you get a full refund automatically.</li>
+  <li>The exact location is shared only after confirmation.</li>
+</ul>
+
+<h2>Cancelling</h2>
+<p>Cancellations and refunds follow our <a href="/cancellation-policy">cancellation policy</a>, the same for every home.</p>
+
+<h2>Being a good guest</h2>
+<p>You are visiting a family's home. Arrive on time, follow the house's customs, and ask before taking photos of people.</p>
+{% endblock %}
