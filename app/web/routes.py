@@ -14,10 +14,39 @@ from app.db.session import get_session
 from app.media.store import Media
 
 HOME_LISTINGS = 3  # the home page shows this many; "/?all=1" shows every live listing
+EXPERIENCE_PHOTOS = {
+    "blockprint": "/static/img/exp-blockprint.webp",
+    "courtyard": "/static/img/exp-courtyard.webp",
+    "food": "/static/img/exp-kitchen.webp",
+    "cooking": "/static/img/exp-kitchen.webp",
+    "kolam": "/static/img/exp-kolam.webp",
+    "pottery": "/static/img/exp-pottery.webp",
+    "poetry": "/static/img/exp-pottery.webp",
+    "clay pot": "/static/img/exp-pottery.webp",
+    "rooftop": "/static/img/exp-rooftop.webp",
+}
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/web/templates")
 templates.env.filters["ist"] = format_ist
+
+
+def experience_photo_for(listing: Listing) -> str | None:
+    text = " ".join(
+        str(value or "")
+        for value in (
+            listing.category,
+            listing.title_en,
+            listing.description_en,
+            listing.description_hi,
+        )
+    ).lower()
+    if not listing.title_en or listing.title_en.lower().startswith("home "):
+        return None
+    for keyword, path in EXPERIENCE_PHOTOS.items():
+        if keyword in text:
+            return path
+    return None
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -52,6 +81,11 @@ async def browse(
         .distinct(Media.listing_id)
     )
     photos = dict((await session.execute(first_photo)).tuples().all())
+    experience_photos = {
+        listing.id: experience_photo_for(listing)
+        for listing in listings
+        if not photos.get(listing.id)
+    }
     cities = (
         await session.scalars(select(Listing.city).where(live).distinct().order_by(Listing.city))
     ).all()
@@ -62,6 +96,7 @@ async def browse(
             "listings": listings,
             "q": q,
             "photos": photos,
+            "experience_photos": experience_photos,
             "cities": cities,
             "show_all": show_all,
         },
@@ -122,6 +157,7 @@ async def listing_detail(
         context={
             "listing": listing,
             "host": await session.get(Host, listing.host_id),
+            "experience_photo": experience_photo_for(listing),
             "slots": slots,
             "payment_failed": payment == "failed",
         },

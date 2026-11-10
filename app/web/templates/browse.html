@@ -82,6 +82,10 @@
             <div class="arch-frame thin"><div class="xp-art xp-photo arch">
               <img src="/media/{{ photos[listing.id] }}" alt="Photo of {{ listing.title_en or listing.description_hi }}" loading="lazy">
             </div></div>
+            {% elif experience_photos[listing.id] %}
+            <div class="arch-frame thin"><div class="xp-art xp-photo arch">
+              <img src="{{ experience_photos[listing.id] }}" alt="Photo of {{ listing.title_en or listing.description_hi }}" loading="lazy">
+            </div></div>
             {% else %}
             <div class="arch-frame thin"><div class="xp-art arch">
               <span class="xp-hi" lang="hi" aria-hidden="true">{{ cat_hi[cat] }}</span>

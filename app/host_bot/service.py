@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from datetime import datetime
 
@@ -34,6 +35,15 @@ LOCATION_KEYBOARD = ReplyKeyboardMarkup(
 def process_extracted_fields(
     session: OnboardingSession, extracted: ListingFieldsUpdate, commission_bps: int
 ) -> str:
+    # Prisma/LLM can occasionally hear "pottery" as "poetry". Keep the
+    # host's intended craft experience and its image mapping intact.
+    if extracted.activity_description:
+        extracted.activity_description = re.sub(
+            r"\bpoet+ry\b|\bpotery\b",
+            "pottery",
+            extracted.activity_description,
+            flags=re.IGNORECASE,
+        )
     session.merge(extracted)
     return reply_for(session, commission_bps)
 

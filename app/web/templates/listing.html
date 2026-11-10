@@ -116,7 +116,7 @@
     </header>
 
     <div class="gallery" aria-label="Photos">
-      <div class="arch-frame main-frame"><div class="arch-inner"><div class="pic main arch"><span class="hi" lang="hi" aria-hidden="true">{{ cat_hi[cat] }}</span><span class="soon t-label">Photo coming soon</span></div></div></div>
+      <div class="arch-frame main-frame"><div class="arch-inner"><div class="pic main arch">{% if experience_photo %}<img src="{{ experience_photo }}" alt="Photo of {{ listing.title_en or listing.description_hi }}">{% else %}<span class="hi" lang="hi" aria-hidden="true">{{ cat_hi[cat] }}</span><span class="soon t-label">Photo coming soon</span>{% endif %}</div></div></div>
       <div class="side">
         <div class="pic alt1"><i class="ph ph-house-line" aria-hidden="true"></i><span class="soon t-label">Home photo coming soon</span></div>
         <div class="pic alt2"><i class="ph ph-hand-heart" aria-hidden="true"></i><span class="soon t-label">Host photo coming soon</span></div>
