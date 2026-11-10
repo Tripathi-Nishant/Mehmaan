@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -49,6 +50,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Mehmaan", docs_url=None, redoc_url=None, lifespan=lifespan)
+mimetypes.add_type("image/webp", ".webp")
 app.add_middleware(PublicRateLimitMiddleware)
 app.add_exception_handler(StarletteHTTPException, http_error)
 app.add_exception_handler(RequestValidationError, validation_error)

@@ -18,7 +18,7 @@ from app.gnani.tts import TtsError, synthesize
 from app.gnani.usage import UsageGuard
 from app.host_bot.intents import classify_reply
 from app.host_bot.location import PIN_REJECTIONS, check_location_pin
-from app.host_bot.onboarding import OnboardingSession
+from app.host_bot.onboarding import OnboardingSession, OnboardingState
 from app.host_bot.persistence import load_session, publish_listing, save_session
 from app.host_bot.service import (
     decide_voice_action,
@@ -62,6 +62,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def new_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
+        async with session_factory() as db:
+            host, onboarding = await load_session(
+                db, update.effective_user.id, update.effective_chat.id
+            )
+            onboarding.fields = {}
+            onboarding.state = OnboardingState.COLLECTING
+            onboarding.turn_count = 0
+            await save_session(db, host.id, onboarding)
         await send_host_voice_or_text(
             update,
             context,
