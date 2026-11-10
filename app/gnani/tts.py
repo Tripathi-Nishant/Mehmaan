@@ -16,6 +16,9 @@ async def synthesize(text: str, language: str, settings: Settings, usage: UsageG
         "model": settings.gnani_tts_model,
         "language": language,
         "voice": voice,
+        "sample_rate": 48000,
+        "container": "ogg",
+        "encoding": "oggopus",
     }
     headers = {"X-API-Key-ID": settings.gnani_api_key}
     try:

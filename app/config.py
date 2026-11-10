@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     gnani_base_url: str = "https://api.vachana.ai"
     gnani_stt_model: str = "prisma-v2.5"
     gnani_tts_model: str = "timbre-v2.5"
-    gnani_tts_voice_hi: str = ""
-    gnani_tts_voice_en: str = ""
+    gnani_tts_voice_hi: str = "Bhavna"
+    gnani_tts_voice_en: str = "Kaveri"
     gnani_daily_call_cap: int = 800
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""

@@ -33,6 +33,8 @@ async def to_wav(audio: bytes, source_suffix: str = ".ogg") -> bytes:
 
 async def to_telegram_voice(audio: bytes) -> bytes:
     """Normalize TTS output to Telegram's preferred OGG/Opus voice format."""
+    if audio.startswith(b"OggS"):
+        return audio
     with tempfile.TemporaryDirectory() as directory:
         # Timbre returns headerless signed 16-bit mono PCM, not a WAV container.
         source = Path(directory) / "source.pcm"
@@ -44,7 +46,7 @@ async def to_telegram_voice(audio: bytes) -> bytes:
             "-f",
             "s16le",
             "-ar",
-            "24000",
+            "48000",
             "-ac",
             "1",
             "-i",
